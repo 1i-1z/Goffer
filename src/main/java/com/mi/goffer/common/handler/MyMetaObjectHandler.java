@@ -1,5 +1,11 @@
 package com.mi.goffer.common.handler;
 
+import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
+import org.apache.ibatis.reflection.MetaObject;
+import org.springframework.stereotype.Component;
+
+import java.util.Date;
+
 /**
  * @Author: 1i-1z
  * @Date: 2026/3/10 21:47
