@@ -1,0 +1,25 @@
+package com.mi.goffer.common.handler;
+
+/**
+ * @Author: 1i-1z
+ * @Date: 2026/3/10 21:47
+ * @Description: 
+ */
+@Component
+public class MyMetaObjectHandler implements MetaObjectHandler {
+    // 插入时的填充策略
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        // 插入新数据时，更新 “创建时间 ”和 “修改时间 ”为当前时间
+        this.setFieldValByName("createTime", new Date(), metaObject);
+        this.setFieldValByName("updateTime", new Date(), metaObject);
+
+    }
+
+    // 更新时的填充策略
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        // 更修数据时，更新 “修改时间 ”为当前时间
+        this.setFieldValByName("updateTime", new Date(), metaObject);
+    }
+}
