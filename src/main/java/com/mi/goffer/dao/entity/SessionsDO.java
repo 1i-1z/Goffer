@@ -9,7 +9,7 @@ import java.util.Date;
 /**
  * @Author: 1i-1z
  * @Date: 2026/3/10 21:55
- * @Description: 封装数据库表sessions的实体类
+ * @Description: 会话实体类
  */
 @Data
 public class SessionsDO{

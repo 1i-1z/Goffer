@@ -9,7 +9,7 @@ import java.util.Date;
 /**
  * @Author: 1i-1z
  * @Date: 2026/3/10 21:44
- * @Description: 封装数据库表contexts的实体类
+ * @Description: 上下文实体类
  */
 @Data
 public class ContextsDO {

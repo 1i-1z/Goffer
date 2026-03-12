@@ -5,7 +5,7 @@ import lombok.Data;
 /**
  * @Author: 1i-1z
  * @Date: 2026/3/10 21:43
- * @Description:
+ * @Description: 用户实体类
  */
 @Data
 public class UsersDO {
