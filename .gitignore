@@ -68,6 +68,6 @@ logs/
 /build/
 
 # Config (敏感配置，不提交到版本控制)
-src/main/resources/application.yml
-src/main/resources/application-*.yml
-!src/main/resources/application-example.yml
+#src/main/resources/application.yml
+#src/main/resources/application-*.yml
+#!src/main/resources/application-example.yml
