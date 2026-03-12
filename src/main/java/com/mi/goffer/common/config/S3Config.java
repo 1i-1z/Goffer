@@ -2,6 +2,7 @@ package com.mi.goffer.common.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Component;
  * @Description: S3 配置类
  */
 @Data
-@Component
+@Configuration
 @ConfigurationProperties(prefix = "aws.s3")
 public class S3Config {
 
