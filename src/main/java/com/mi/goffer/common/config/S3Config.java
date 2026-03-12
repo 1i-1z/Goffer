@@ -32,12 +32,12 @@ public class S3Config {
     /**
      * 访问id
      */
-    private String accessKey;
+    private String accessKeyId;
 
     /**
      * 访问密钥
      */
-    private String secretKey;
+    private String secretAccessKey;
 
     /**
      * 访问方式

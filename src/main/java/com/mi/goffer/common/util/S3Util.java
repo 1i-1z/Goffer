@@ -33,8 +33,8 @@ public class S3Util {
      */
     public S3Client createClient() {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(
-                s3Config.getAccessKey(),
-                s3Config.getSecretKey());
+                s3Config.getAccessKeyId(),
+                s3Config.getSecretAccessKey());
 
         return S3Client.builder()
                 .endpointOverride(URI.create(s3Config.getEndpoint()))
