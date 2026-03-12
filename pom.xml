@@ -146,6 +146,12 @@
             <version>${aws.sdk.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>auth</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+
         <!-- ==================== JWT ==================== -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
