@@ -37,4 +37,9 @@ public class JwtConfig {
      * Token前缀
      */
     private String prefix;
+
+    /**
+     * Token前缀长度
+     */
+    private Integer prefixLength;
 }
