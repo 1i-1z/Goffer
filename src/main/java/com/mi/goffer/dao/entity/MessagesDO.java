@@ -2,6 +2,7 @@ package com.mi.goffer.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.util.Date;
@@ -12,6 +13,7 @@ import java.util.Date;
  * @Description: 消息实体类
  */
 @Data
+@TableName("messages")
 public class MessagesDO{
     /**
      * 消息id

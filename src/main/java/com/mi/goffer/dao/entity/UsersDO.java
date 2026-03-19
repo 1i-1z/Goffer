@@ -1,5 +1,8 @@
 package com.mi.goffer.dao.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
@@ -8,11 +11,13 @@ import lombok.Data;
  * @Description: 用户实体类
  */
 @Data
+@TableName("users")
 public class UsersDO {
 
     /**
      * 用户id
      */
+    @TableId(type = IdType.ASSIGN_UUID)
     private String usersId;
 
     /**
