@@ -1,6 +1,9 @@
 package com.mi.goffer.dao.entity;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * @Author: 1i-1z
@@ -8,6 +11,9 @@ import lombok.Data;
  * @Description: 用户实体类
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class UsersDO {
 
     /**

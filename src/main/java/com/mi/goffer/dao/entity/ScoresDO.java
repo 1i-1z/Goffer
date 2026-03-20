@@ -2,7 +2,10 @@ package com.mi.goffer.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
@@ -12,6 +15,9 @@ import java.util.Date;
  * @Description: 分数实体类
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class ScoresDO {
     /**
      * 分数id
