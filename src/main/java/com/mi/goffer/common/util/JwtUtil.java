@@ -127,4 +127,15 @@ public class JwtUtil {
         stringRedisTemplate.delete(key);
         log.info("用户 {} 已退出登录，Token 已从 Redis 中删除", userId);
     }
+
+    /**
+     * 检查用户 Token 是否存在于 Redis 中
+     *
+     * @param userId 用户ID
+     * @return 是否存在
+     */
+    public boolean isTokenExists(String userId) {
+        String key = RedisCacheConstant.USER_TOKEN_KEY + userId;
+        return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
+    }
 }
