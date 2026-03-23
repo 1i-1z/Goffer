@@ -5,7 +5,7 @@ import lombok.Data;
 /**
  * @Author: 1i-1z
  * @Date: 2026/3/16 12:56
- * @Description:
+ * @Description: 用户身份验证响应参数DTO
  */
 @Data
 public class UserAuthenticateRespDTO {
