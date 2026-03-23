@@ -26,8 +26,8 @@ public class UserController {
     /**
      * 发送邮箱验证码
      *
-     * @param email
-     * @return
+     * @param email 邮箱
+     * @return 响应结果
      */
     @GetMapping("send-code")
     public Result<Void> sendCode(@RequestParam String email) {
@@ -38,8 +38,8 @@ public class UserController {
     /**
      * 用户身份验证
      *
-     * @param reqDTO
-     * @return
+     * @param reqDTO 请求参数
+     * @return 响应结果
      */
     @PostMapping("authenticate")
     public Result<UserAuthenticateRespDTO> authenticate(@RequestBody UserAuthenticateReqDTO reqDTO) {
@@ -49,8 +49,8 @@ public class UserController {
     /**
      * 修改用户名
      *
-     * @param username
-     * @return
+     * @param username 用户名
+     * @return 响应结果
      */
     @PutMapping("username")
     public Result<String> updateUserName(@RequestParam String username) {
@@ -60,8 +60,8 @@ public class UserController {
     /**
      * 修改邮箱
      *
-     * @param reqDTO
-     * @return
+     * @param reqDTO 请求参数
+     * @return 响应结果
      */
     @PutMapping("email")
     public Result<String> updateEmail(@RequestBody UserUpdateEmailReqDTO reqDTO) {
@@ -71,8 +71,8 @@ public class UserController {
     /**
      * 上传头像
      *
-     * @param file
-     * @return
+     * @param file 文件
+     * @return 响应结果
      */
     @PostMapping("avatar")
     public Result<String> uploadAvatar(@RequestParam("avatar") MultipartFile file) {
@@ -82,7 +82,7 @@ public class UserController {
     /**
      * 退出登录
      *
-     * @return
+     * @return 响应结果
      */
     @PostMapping("/logout")
     public Result<Void> logout() {
