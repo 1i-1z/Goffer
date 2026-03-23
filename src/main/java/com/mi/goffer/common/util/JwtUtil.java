@@ -138,4 +138,13 @@ public class JwtUtil {
         String key = RedisCacheConstant.USER_TOKEN_KEY + userId;
         return Boolean.TRUE.equals(stringRedisTemplate.hasKey(key));
     }
+
+    /**
+     * 获取 JwtConfig
+     *
+     * @return JwtConfig
+     */
+    public JwtConfig getJwtConfig() {
+        return jwtConfig;
+    }
 }
