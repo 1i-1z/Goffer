@@ -22,8 +22,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns(
-
+                .excludePathPatterns("/goffer/user/authenticate"
                 ); // 无需任何权限
     }
 
