@@ -1,0 +1,29 @@
+package com.mi.goffer.controller;
+
+import com.mi.goffer.dto.req.ChatReqDTO;
+import com.mi.goffer.service.AssistantService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+
+/**
+ * @Author: TwentyFiveBTea
+ * @Date: 2026/3/23 15:34
+ * @Description: 大模型对话控制层
+ */
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/goffer")
+public class ChatController {
+
+    private final AssistantService assistantService;
+
+    @PostMapping("/chat")
+    public Flux<String> chat(@RequestBody @Validated ChatReqDTO reqDTO) {
+        return assistantService.chat();
+    }
+}
