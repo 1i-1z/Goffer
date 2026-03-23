@@ -26,6 +26,7 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import static com.mi.goffer.common.constant.RedisCacheConstant.*;
+import static com.mi.goffer.common.convention.errorcode.BaseErrorCode.*;
 
 /**
  * @Author: 1i-1z
@@ -37,8 +38,8 @@ import static com.mi.goffer.common.constant.RedisCacheConstant.*;
 @RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implements UserService {
 
-    private final MailUtil mailUtil;
     private final StringRedisTemplate redisTemplate;
+    private final MailUtil mailUtil;
     private final JwtUtil jwtUtil;
     private final S3Util s3Util;
 
@@ -54,7 +55,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         String sendLockKey = "email:send:lock:" + email;
         Boolean hasLock = redisTemplate.opsForValue().setIfAbsent(sendLockKey, "1", 60, TimeUnit.SECONDS);
         if (Boolean.FALSE.equals(hasLock)) {
-            throw new ClientException("验证码发送过于频繁，请60秒后重试");
+            throw new ClientException(EMAIL_CODE_TOO_FREQUENT);
         }
 
         // 存储到 Redis（有效期 5 分钟）
@@ -109,10 +110,10 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         String userId = UserContext.getCurrentUserId();
 
         if (userId == null) {
-            throw new ClientException("用户未登录");
+            throw new ClientException(USER_NOT_LOGIN);
         }
         if (username == null || username.length() < 2 || username.length() > 20) {
-            throw new ClientException("用户名长度必须在 2-20 位之间");
+            throw new ClientException(USERNAME_LENGTH_ERROR);
         }
         LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.eq(UsersDO::getUsersId, userId)
@@ -130,11 +131,11 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         String userId = UserContext.getCurrentUserId();
 
         if (userId == null) {
-            throw new ClientException("用户未登录");
+            throw new ClientException(USER_NOT_LOGIN);
         }
         // 验证邮箱格式
         if (reqDTO.getEmail() == null || !reqDTO.getEmail().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
-            throw new ClientException("邮箱格式不正确");
+            throw new ClientException(EMAIL_FORMAT_ERROR);
         }
         // 邮箱验证码校验
         validateEmailCode(reqDTO.getEmail(), reqDTO.getEmailCode());
@@ -144,7 +145,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         queryWrapper.eq(UsersDO::getEmail, reqDTO.getEmail());
         UsersDO existsUser = baseMapper.selectOne(queryWrapper);
         if (existsUser != null) {
-            throw new ClientException("该邮箱已被注册");
+            throw new ClientException(EMAIL_EXIST);
         }
         LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.eq(UsersDO::getUsersId, userId)
@@ -162,12 +163,12 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         String userId = UserContext.getCurrentUserId();
 
         if (userId == null) {
-            throw new ClientException("用户未登录");
+            throw new ClientException(USER_NOT_LOGIN);
         }
         // 上传文件到S3
         String avatarUrl = s3Util.uploadAvatar(file, userId);
         if (avatarUrl == null) {
-            throw new ClientException("头像上传失败");
+            throw new ClientException(AVATAR_UPLOAD_FAILED);
         }
         LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.eq(UsersDO::getUsersId, userId)
@@ -197,11 +198,11 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
 
         // 1. 邮箱验证码过期/不存在
         if (StrUtil.isBlank(cachedCode)) {
-            throw new ClientException("验证码已过期，请重新获取");
+            throw new ClientException(EMAIL_CODE_EXPIRED);
         }
         // 2. 邮箱验证码错误
         if (!cachedCode.equals(inputCode)) {
-            throw new ClientException("验证码错误，请重新输入");
+            throw new ClientException(EMAIL_CODE_ERROR);
         }
         // 防止重复使用
         redisTemplate.delete(cacheKey);
