@@ -3,19 +3,24 @@ package com.mi.goffer.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.mi.goffer.common.context.UserContext;
 import com.mi.goffer.common.convention.exception.ClientException;
 import com.mi.goffer.common.util.JwtUtil;
 import com.mi.goffer.common.util.MailUtil;
+import com.mi.goffer.common.util.S3Util;
 import com.mi.goffer.dao.entity.UsersDO;
 import com.mi.goffer.dao.mapper.UsersMapper;
 import com.mi.goffer.dto.req.UserAuthenticateReqDTO;
+import com.mi.goffer.dto.req.UserUpdateEmailReqDTO;
 import com.mi.goffer.dto.resp.UserAuthenticateRespDTO;
 import com.mi.goffer.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -25,7 +30,7 @@ import static com.mi.goffer.common.constant.RedisCacheConstant.*;
 /**
  * @Author: 1i-1z
  * @Date: 2026/3/16 13:03
- * @Description:
+ * @Description: 用户接口实现层
  */
 @Service
 @Slf4j
@@ -35,6 +40,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
     private final MailUtil mailUtil;
     private final StringRedisTemplate redisTemplate;
     private final JwtUtil jwtUtil;
+    private final S3Util s3Util;
 
     /**
      * 发送邮箱验证码
@@ -69,24 +75,21 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         // 根据邮箱查询用户
         LambdaQueryWrapper<UsersDO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(UsersDO::getEmail, reqDTO.getEmail());
-        UsersDO hasUsersDO = baseMapper.selectOne(queryWrapper);
-        if(hasUsersDO == null){
+        UsersDO usersDO = baseMapper.selectOne(queryWrapper);
+        if(usersDO == null){
             // 创建用户实体并设置属性
-            UsersDO usersDO = BeanUtil.toBean(reqDTO, UsersDO.class);
+            usersDO = BeanUtil.toBean(reqDTO, UsersDO.class);
             usersDO.setUsersName(generateRandomUsername());
             usersDO.setEmail(reqDTO.getEmail());
             usersDO.setAvatar("https://goffer-oss.oss-cn-guangzhou.aliyuncs.com/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260319181500_415_36.jpg");
             baseMapper.insert(usersDO);
         }
-
-
-        UsersDO usersDO = baseMapper.selectOne(queryWrapper);
-
         // 生成 token
         String token = jwtUtil.generateUserToken(usersDO.getUsersId());
-
         // 将 token 缓存到 Redis
         cacheToken(usersDO.getUsersId(), token);
+        // 设置当前用户ID
+        UserContext.setCurrentUserId(usersDO.getUsersId());
 
         UserAuthenticateRespDTO respDTO = new UserAuthenticateRespDTO();
         respDTO.setUsername(usersDO.getUsersName());
@@ -95,8 +98,93 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         respDTO.setToken(token);
 
         return respDTO;
-
     }
+
+    /**
+     * 修改用户名
+     */
+    @Override
+    public String updateUserName(String username) {
+        // 获取当前用户ID（由拦截器设置）
+        String userId = UserContext.getCurrentUserId();
+
+        if (userId == null) {
+            throw new ClientException("用户未登录");
+        }
+        if (username == null || username.length() < 2 || username.length() > 20) {
+            throw new ClientException("用户名长度必须在 2-20 位之间");
+        }
+        LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(UsersDO::getUsersId, userId)
+                .set(UsersDO::getUsersName, username);
+        baseMapper.update(null, updateWrapper);
+        return username;
+    }
+
+    /**
+     * 修改邮箱
+     */
+    @Override
+    public String updateEmail(UserUpdateEmailReqDTO reqDTO) {
+        // 获取当前用户ID（由拦截器设置）
+        String userId = UserContext.getCurrentUserId();
+
+        if (userId == null) {
+            throw new ClientException("用户未登录");
+        }
+        // 验证邮箱格式
+        if (reqDTO.getEmail() == null || !reqDTO.getEmail().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+            throw new ClientException("邮箱格式不正确");
+        }
+        // 邮箱验证码校验
+        validateEmailCode(reqDTO.getEmail(), reqDTO.getEmailCode());
+
+        // 检查邮箱是否已被使用
+        LambdaQueryWrapper<UsersDO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(UsersDO::getEmail, reqDTO.getEmail());
+        UsersDO existsUser = baseMapper.selectOne(queryWrapper);
+        if (existsUser != null) {
+            throw new ClientException("该邮箱已被注册");
+        }
+        LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(UsersDO::getUsersId, userId)
+                .set(UsersDO::getEmail, reqDTO.getEmail());
+        baseMapper.update(null, updateWrapper);
+        return reqDTO.getEmail();
+    }
+
+    /**
+     * 上传头像
+     */
+    @Override
+    public String uploadAvatar(MultipartFile file) {
+        // 获取当前用户ID（由拦截器设置）
+        String userId = UserContext.getCurrentUserId();
+
+        if (userId == null) {
+            throw new ClientException("用户未登录");
+        }
+        // 上传文件到S3
+        String avatarUrl = s3Util.uploadAvatar(file, userId);
+        if (avatarUrl == null) {
+            throw new ClientException("头像上传失败");
+        }
+        LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(UsersDO::getUsersId, userId)
+                .set(UsersDO::getAvatar, avatarUrl);
+        baseMapper.update(null, updateWrapper);
+        return avatarUrl;
+    }
+
+    /**
+     * 退出登录 - 删除 Redis 中的 Token
+     */
+    @Override
+    public void logout() {
+        String userId = UserContext.getCurrentUserId();
+        jwtUtil.logout(userId);
+    }
+
 
     /**
      *  邮箱验证码校验
@@ -125,8 +213,10 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
      */
     private void cacheToken(String userId, String token) {
         String tokenKey = USER_TOKEN_KEY + userId;
-        redisTemplate.opsForValue().set(tokenKey, token, TOKEN_EXPIRE_SECONDS, TimeUnit.SECONDS);
-        log.info("Token 已缓存到 Redis，userId: {}, token: {}, 有效期：{}秒", userId, token, TOKEN_EXPIRE_SECONDS);
+        // 使用jwtConfig中的过期时间，确保与JWT token过期时间一致
+        long expireSeconds = jwtUtil.getJwtConfig().getExpiration().getSeconds();
+        redisTemplate.opsForValue().set(tokenKey, token, expireSeconds, TimeUnit.SECONDS);
+        log.info("Token 已缓存到 Redis，userId: {}, token: {}, 有效期：{}秒", userId, token, expireSeconds);
     }
 
     /**
