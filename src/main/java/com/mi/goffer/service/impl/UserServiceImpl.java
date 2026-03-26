@@ -80,20 +80,20 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         if(usersDO == null){
             // 创建用户实体并设置属性
             usersDO = BeanUtil.toBean(reqDTO, UsersDO.class);
-            usersDO.setUsersName(generateRandomUsername());
+            usersDO.setUserName(generateRandomUsername());
             usersDO.setEmail(reqDTO.getEmail());
             usersDO.setAvatar("https://goffer-oss.oss-cn-guangzhou.aliyuncs.com/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260319181500_415_36.jpg");
             baseMapper.insert(usersDO);
         }
         // 生成 token
-        String token = jwtUtil.generateUserToken(usersDO.getUsersId());
+        String token = jwtUtil.generateUserToken(usersDO.getUserId());
         // 将 token 缓存到 Redis
-        cacheToken(usersDO.getUsersId(), token);
+        cacheToken(usersDO.getUserId(), token);
         // 设置当前用户ID
-        UserContext.setCurrentUserId(usersDO.getUsersId());
+        UserContext.setCurrentUserId(usersDO.getUserId());
 
         UserAuthenticateRespDTO respDTO = new UserAuthenticateRespDTO();
-        respDTO.setUsername(usersDO.getUsersName());
+        respDTO.setUsername(usersDO.getUserName());
         respDTO.setEmail(usersDO.getEmail());
         respDTO.setAvatar(usersDO.getAvatar());
         respDTO.setToken(token);
@@ -116,8 +116,8 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
             throw new ClientException(USERNAME_LENGTH_ERROR);
         }
         LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.eq(UsersDO::getUsersId, userId)
-                .set(UsersDO::getUsersName, username);
+        updateWrapper.eq(UsersDO::getUserId, userId)
+                .set(UsersDO::getUserName, username);
         baseMapper.update(null, updateWrapper);
         return username;
     }
@@ -148,7 +148,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
             throw new ClientException(EMAIL_EXIST);
         }
         LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.eq(UsersDO::getUsersId, userId)
+        updateWrapper.eq(UsersDO::getUserId, userId)
                 .set(UsersDO::getEmail, reqDTO.getEmail());
         baseMapper.update(null, updateWrapper);
         return reqDTO.getEmail();
@@ -171,7 +171,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
             throw new ClientException(AVATAR_UPLOAD_FAILED);
         }
         LambdaUpdateWrapper<UsersDO> updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.eq(UsersDO::getUsersId, userId)
+        updateWrapper.eq(UsersDO::getUserId, userId)
                 .set(UsersDO::getAvatar, avatarUrl);
         baseMapper.update(null, updateWrapper);
         return avatarUrl;
