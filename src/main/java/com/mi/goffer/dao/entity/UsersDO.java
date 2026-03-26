@@ -24,12 +24,12 @@ public class UsersDO {
      * 用户id
      */
     @TableId(type = IdType.ASSIGN_UUID)
-    private String usersId;
+    private String userId;
 
     /**
      * 用户名字
      */
-    private String usersName;
+    private String userName;
 
     /**
      * 用户邮箱

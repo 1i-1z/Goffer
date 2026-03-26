@@ -24,12 +24,12 @@ public class MessagesDO{
     /**
      * 消息id
      */
-    private String messagesId;
+    private Integer messageId;
 
     /**
      * 所属会话id
      */
-    private String sessionsId;
+    private String sessionId;
 
     /**
      * 角色：user、assistant

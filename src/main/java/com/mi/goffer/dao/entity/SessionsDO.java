@@ -1,14 +1,14 @@
 package com.mi.goffer.dao.entity;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.List;
 
 /**
  * @Author: 1i-1z
@@ -20,22 +20,23 @@ import java.util.Date;
 @NoArgsConstructor
 @Builder
 @TableName("sessions")
-public class SessionsDO{
+public class SessionsDO {
 
     /**
-     * 会话id
+     * 会话id（雪花算法）
      */
-    private String sessionsId;
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long sessionId;
 
     /**
      * 所属用户id
      */
-    private String usersId;
+    private String userId;
 
     /**
      * 会话标题
      */
-    private String tittle;
+    private String title;
 
     /**
      * 模式：1（面试）、0（普通对话）
@@ -45,7 +46,23 @@ public class SessionsDO{
     /**
      * 是否软删除：1（是）、0（否）
      */
-    private String isDeleted;
+    private Integer isDeleted;
+
+    /**
+     * 状态：会话状态：-1（普通会话）、0（面试进行中）、1（面试已结束）、2（面试复盘完成）
+     */
+    private Integer status;
+
+    /**
+     * 该会话最新的压缩摘要内容
+     */
+    private String lastSummary;
+
+    /**
+     * 参与本次压缩的消息id
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<Long> lastCompressedMessageId;
 
     /**
      * 创建时间

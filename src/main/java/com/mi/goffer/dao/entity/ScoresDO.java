@@ -24,17 +24,17 @@ public class ScoresDO {
     /**
      * 分数id
      */
-    private String scoresId;
+    private String scoreId;
 
     /**
      * 所属用户id
      */
-    private String usersId;
+    private String userId;
 
     /**
      * 所属消息id
      */
-    private String messagesId;
+    private String messageId;
 
     /**
      * 分数
