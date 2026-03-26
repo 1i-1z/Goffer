@@ -29,7 +29,7 @@ public class MessagesDO{
     /**
      * 所属会话id
      */
-    private String sessionId;
+    private Long sessionId;
 
     /**
      * 角色：user、assistant
