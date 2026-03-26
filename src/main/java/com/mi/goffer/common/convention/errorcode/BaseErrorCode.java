@@ -37,8 +37,8 @@ public enum BaseErrorCode implements IErrorCode {
     AVATAR_UPLOAD_FAILED("0004300", "头像上传失败"),
 
     // 会话与消息（0005xxx）
-    SESSION_NOT_FOUND("0005300", "会话不存在或无权访问");
-
+    SESSION_NOT_FOUND("0005300", "会话不存在或无权访问"),
+    SESSION_SUMMARY_FAILED("0005301", "对话摘要生成失败");
 
     // 用户注册登陆错误码
     private final String code;
