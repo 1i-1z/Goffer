@@ -1,5 +1,6 @@
 package com.mi.goffer.service;
 
+import com.mi.goffer.dto.req.ChatReqDTO;
 import reactor.core.publisher.Flux;
 
 /**
@@ -12,18 +13,17 @@ public interface AssistantService {
     /**
      * 普通对话
      * @param userId 用户id
-     * @param sessionId 会话id
-     * @param message 用户输入
+     * @param reqDTO 请求参数
      * @return Flux<String> 流式响应
      */
-    Flux<String> chat(String userId, Long sessionId, String message);
+    Flux<String> chat(String userId, ChatReqDTO reqDTO);
 
     /**
      * 面试对话
+     *
      * @param userId 用户id
-     * @param sessionId 会话id
-     * @param message 用户输入
+     * @param reqDTO 请求参数
      * @return Flux<String> 流式响应
      */
-    Flux<String> interview(String userId, String sessionId, String message);
+    Flux<String> interview(String userId, ChatReqDTO reqDTO);
 }
