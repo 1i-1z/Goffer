@@ -50,20 +50,16 @@ public class ConversationContextManager {
     /**
      * 判断是否需要生成摘要
      *
-     * @param sessionId 会话id
-     * @return 判断是否需要生成摘要
+     * @param messages 待判断的消息列表
+     * @return 是否需要生成摘要
      */
-    public boolean needSummarize(Long sessionId) {
-        SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
+    public boolean needSummarize(List<MessagesDO> messages) {
         // 会话不存在
-        if (sessionsDO == null) return false;
-
-        List<MessagesDO> uncompressedMessages = getUncompressedMessages(sessionId, sessionsDO);
-        // 如果此时用户输入的消息数量达到阈值，则需要生成摘要
-        long count = uncompressedMessages.stream()
+        if (CollectionUtils.isEmpty(messages)) return false;
+        long userMessageCount = messages.stream()
                 .filter(message -> message.getRole().equals(MessageRoleEnum.USER.getCode()))
                 .count();
-        return count >= SUMMARY_TRIGGER_TURNS;
+        return userMessageCount >= SUMMARY_TRIGGER_TURNS;
     }
 
     /**
@@ -90,13 +86,12 @@ public class ConversationContextManager {
     }
 
     /**
-     * 压缩会话历史
+     * 压缩消息列表
      *
-     * @param sessionId 会话id
+     * @param uncompressedMessages 未压缩的消息列表
+     * @param sessionsDO           会话信息
      */
-    public void compress(Long sessionId) {
-        SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
-        List<MessagesDO> uncompressedMessages = getUncompressedMessages(sessionId, sessionsDO);
+    public void compress(List<MessagesDO> uncompressedMessages, SessionsDO sessionsDO) {
         if (CollectionUtils.isEmpty(uncompressedMessages)) return;
 
         String summary;
@@ -110,7 +105,7 @@ public class ConversationContextManager {
         }
         // 将摘要持久化进数据库
         LambdaUpdateWrapper<SessionsDO> updateWrapper = Wrappers.lambdaUpdate(SessionsDO.class)
-                .eq(SessionsDO::getSessionId, sessionId)
+                .eq(SessionsDO::getSessionId, sessionsDO.getSessionId())
                 .set(SessionsDO::getLastSummary, summary)
                 .set(SessionsDO::getLastCompressedMessageId, uncompressedMessages.stream()
                         .map(MessagesDO::getMessageId)
