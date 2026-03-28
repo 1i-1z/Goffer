@@ -31,6 +31,6 @@ public class ChatController {
      */
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> chat(@RequestBody @Validated ChatReqDTO reqDTO) {
-        return assistantService.chat(UserContext.getCurrentUserId(), reqDTO.getSessionId(), reqDTO.getMessage());
+        return assistantService.chat(UserContext.getCurrentUserId(), reqDTO);
     }
 }
