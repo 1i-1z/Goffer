@@ -89,6 +89,11 @@ public class ConversationContextManager {
         );
     }
 
+    /**
+     * 压缩会话历史
+     *
+     * @param sessionId 会话id
+     */
     public void compress(Long sessionId) {
         SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
         List<MessagesDO> uncompressedMessages = getUncompressedMessages(sessionId, sessionsDO);
