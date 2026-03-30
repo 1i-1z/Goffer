@@ -56,13 +56,12 @@ public class SessionsDO {
     /**
      * 该会话最新的压缩摘要内容
      */
-    private String lastSummary;
+    private String lastCompress;
 
     /**
      * 参与本次压缩的消息id
      */
-    @TableField(typeHandler = JacksonTypeHandler.class)
-    private List<Long> lastCompressedMessageId;
+    private Long lastCompressedMessageId;
 
     /**
      * 创建时间

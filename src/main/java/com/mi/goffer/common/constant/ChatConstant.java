@@ -7,20 +7,26 @@ package com.mi.goffer.common.constant;
  */
 public class ChatConstant {
 
-    /**
-     * 最大保留对话轮次（不含摘要）
-     */
-    public static final int MAX_TURNS = 10;
 
     /**
      * 超过多少轮触发总结
      */
-    public static final int SUMMARY_TRIGGER_TURNS = 8;
+    public static final int COMPRESS_TRIGGER_TURNS = 8;
 
     /**
      * 摘要头部
      */
-    public static final String SUMMARY_HEADER = """
+    public static final String COMPRESS_HEADER = """
             【上下文摘要】
             """;
+
+    /**
+     * 标题最大字符数
+     */
+    public static final int TITLE_MAX_LENGTH = 15;
+
+    /**
+     * 默认标题
+     */
+    public static final String DEFAULT_TITLE = "新会话";
 }
