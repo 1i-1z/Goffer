@@ -79,7 +79,7 @@ public class ChatPrompt {
     /**
      * 对话上下文压缩摘要提示词
      */
-    public static final String SUMMARIZE_SYSTEM_PROMPT = """
+    public static final String COMPRESS_SYSTEM_PROMPT = """
             # Role
             你是一名专业的技术秘书，擅长从复杂的对话中提取核心逻辑与待办事项。
             
@@ -93,9 +93,33 @@ public class ChatPrompt {
             4. **悬而未决**：明确标注尚未解决的 `Bug`、待调研的技术点或用户仍存在的困惑。
             5. **极简过滤**：彻底省略寒暄、语气词、重复的确认性话语（如"好的"、"我明白了"）。
             6. **输出规范**：使用第三人称描述，采用"核心背景 + 关键结论 + 待办/疑点"的结构，控制在 250 字以内。
+            7. **增量摘要**：若存在历史摘要，请在其基础上补充完善，而非重复概述。
             
-            # 对话历史
+            # 历史摘要
+            {previous_compress}
+            
+            # 当前会话
             {conversation_history}
+            """;
+
+    /**
+     * 会话标题生成提示词
+     */
+    public static final String GENERATE_TITLE_PROMPT = """
+            # Role
+            你是一名专业的技术秘书，擅长从用户对话中提炼简洁的会话标题。
+            
+            # Task
+            根据以下对话内容，生成一个简洁的会话标题。
+            
+            # Constraints
+            1. 标题必须**精准概括**用户本次咨询的核心话题。
+            2. 长度控制在 **15 个中文字符以内**（含标点）。
+            3. 不要加引号、不要加「」或【】等装饰符号，直接输出纯文本。
+            4. 如果对话内容过于泛泛、即使消息很短也要提取其中任何可识别的关键词（如"你好"、"面试"、"Java"、"简历"等）。
+            
+            # 对话内容
+            {conversation}
             """;
 
     /**
