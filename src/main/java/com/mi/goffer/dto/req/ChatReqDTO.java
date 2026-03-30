@@ -14,7 +14,6 @@ public class ChatReqDTO {
     /**
      * 会话id
      */
-    @NotBlank(message = "会话id不可为空")
     private Long sessionId;
 
     /**
