@@ -2,6 +2,7 @@ package com.mi.goffer.controller;
 
 import com.mi.goffer.common.context.UserContext;
 import com.mi.goffer.dto.req.ChatReqDTO;
+import com.mi.goffer.dto.resp.ChatRespDTO;
 import com.mi.goffer.service.AssistantService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -30,7 +31,7 @@ public class ChatController {
      * @return Flux<String> 流式响应
      */
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> chat(@RequestBody @Validated ChatReqDTO reqDTO) {
+    public Flux<ChatRespDTO> chat(@RequestBody @Validated ChatReqDTO reqDTO) {
         return assistantService.chat(UserContext.getCurrentUserId(), reqDTO);
     }
 }

@@ -1,6 +1,7 @@
 package com.mi.goffer.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.mi.goffer.common.convention.exception.ClientException;
 import com.mi.goffer.common.enums.MessageRoleEnum;
 import com.mi.goffer.common.prompt.ChatPrompt;
@@ -9,11 +10,13 @@ import com.mi.goffer.dao.entity.SessionsDO;
 import com.mi.goffer.dao.mapper.MessagesMapper;
 import com.mi.goffer.dao.mapper.SessionsMapper;
 import com.mi.goffer.dto.req.ChatReqDTO;
+import com.mi.goffer.dto.resp.ChatRespDTO;
 import com.mi.goffer.service.AssistantService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
@@ -23,9 +26,9 @@ import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
-import static com.mi.goffer.common.constant.ChatConstant.MAX_TURNS;
-import static com.mi.goffer.common.constant.ChatConstant.SUMMARY_HEADER;
+import static com.mi.goffer.common.constant.ChatConstant.*;
 import static com.mi.goffer.common.convention.errorcode.BaseErrorCode.SESSION_NOT_FOUND;
 
 /**
@@ -39,6 +42,7 @@ public class AssistantServiceImpl implements AssistantService {
 
     private final MessagesMapper messagesMapper;
     private final SessionsMapper sessionsMapper;
+    private final ChatModel chatModel;
     private final StreamingChatModel streamingChatModel;
     private final ConversationContextManager conversationContextManager;
 
@@ -46,33 +50,48 @@ public class AssistantServiceImpl implements AssistantService {
      * 普通对话
      *
      * @param userId 用户id
-     * @param reqDTO 请求参数
-     * @return Flux<String> 流式响应
+     * @return Flux<ChatRespDTO> 流式响应
      */
     @Override
-    public Flux<String> chat(String userId, ChatReqDTO reqDTO) {
+    public Flux<ChatRespDTO> chat(String userId, ChatReqDTO reqDTO) {
         Long sessionId = reqDTO.getSessionId();
+        // 首次请求，sessionId 为空，自动创建会话
+        if (sessionId == null) {
+            SessionsDO newSession = SessionsDO.builder()
+                    .userId(userId)
+                    .title(DEFAULT_TITLE)
+                    .mode(0)
+                    .isDeleted(0)
+                    .status(0)
+                    .build();
+            sessionsMapper.insert(newSession);
+            sessionId = newSession.getSessionId();
+            // 异步生成标题
+            generateTitleAsync(sessionId, reqDTO.getMessage());
+        } else {
+            SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
+            if (sessionsDO == null) {
+                throw new ClientException(SESSION_NOT_FOUND);
+            }
+        }
+        final Long finalSessionId = sessionId;
         String message = reqDTO.getMessage();
-        // 先持久化消息
-        MessagesDO messagesDO = MessagesDO.builder()
-                .sessionId(sessionId)
-                .role("user")
-                .content(message)
-                .build();
-        messagesMapper.insert(messagesDO);
-
         SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
         if (sessionsDO == null) {
             throw new ClientException(SESSION_NOT_FOUND);
         }
+        // 持久化用户消息
+        messagesMapper.insert(MessagesDO.builder()
+                .sessionId(sessionId)
+                .role(MessageRoleEnum.USER.getCode())
+                .content(message)
+                .build());
 
         List<MessagesDO> uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
-        List<MessagesDO> truncatedMessages = truncateToMaxTurns(uncompressedMessages, MAX_TURNS);
-
-        if (conversationContextManager.needSummarize(truncatedMessages)) {
-            conversationContextManager.compress(truncatedMessages, sessionsDO);
+        if (conversationContextManager.needCompress(uncompressedMessages)) {
+            conversationContextManager.compress(uncompressedMessages, sessionsDO);
             // 压缩后重新加载未压缩部分
-            truncatedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
+            uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
         }
 
         // 构建聊天消息列表
@@ -80,7 +99,7 @@ public class AssistantServiceImpl implements AssistantService {
         // 添加系统提示词
         messageList.add(SystemMessage.from(buildSystemPrompt(sessionsDO)));
         // 添加截断后的消息
-        for (MessagesDO truncatedMessage : truncatedMessages) {
+        for (MessagesDO truncatedMessage : uncompressedMessages) {
             messageList.add(toChatMessage(truncatedMessage));
         }
         // 添加本轮用户消息
@@ -88,31 +107,32 @@ public class AssistantServiceImpl implements AssistantService {
 
         // 流式响应
         StringBuffer fullResponse = new StringBuffer();
-        return Flux.create(emitter -> {
-            streamingChatModel.chat(messageList, new StreamingChatResponseHandler() {
-                @Override
-                public void onPartialResponse(String partialResponse) {
-                    fullResponse.append(partialResponse);
-                    emitter.next(partialResponse);
-                }
+        return Flux.create(emitter -> streamingChatModel.chat(messageList, new StreamingChatResponseHandler() {
+            @Override
+            public void onPartialResponse(String partialResponse) {
+                fullResponse.append(partialResponse);
+                emitter.next(ChatRespDTO.builder()
+                        .sessionId(finalSessionId)
+                        .content(partialResponse)
+                        .build());
+            }
 
-                @Override
-                public void onCompleteResponse(ChatResponse completeResponse) {
-                    messagesMapper.insert(MessagesDO.builder()
-                            .sessionId(sessionId)
-                            .role(MessageRoleEnum.ASSISTANT.getCode())
-                            .content(fullResponse.toString())
-                            .build()
-                    );
-                    emitter.complete();
-                }
+            @Override
+            public void onCompleteResponse(ChatResponse completeResponse) {
+                messagesMapper.insert(MessagesDO.builder()
+                        .sessionId(finalSessionId)
+                        .role(MessageRoleEnum.ASSISTANT.getCode())
+                        .content(fullResponse.toString())
+                        .build()
+                );
+                emitter.complete();
+            }
 
-                @Override
-                public void onError(Throwable error) {
-                    emitter.error(error);
-                }
-            });
-        });
+            @Override
+            public void onError(Throwable error) {
+                emitter.error(error);
+            }
+        }));
     }
 
     /**
@@ -128,6 +148,31 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
+     * 异步生成会话标题
+     *
+     * @param sessionId   会话id
+     * @param userMessage 用户消息
+     */
+    public void generateTitleAsync(Long sessionId, String userMessage) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 构建系统提示词
+                String prompt = ChatPrompt.GENERATE_TITLE_PROMPT.replace("{conversation}", userMessage);
+                // 调用大模型生成标题
+                String title = chatModel.chat(List.of(UserMessage.from(prompt)))
+                        .aiMessage()
+                        .text()
+                        .trim();
+                sessionsMapper.update(Wrappers.lambdaUpdate(SessionsDO.class)
+                        .eq(SessionsDO::getSessionId, sessionId)
+                        .set(SessionsDO::getTitle, title));
+            } catch (Exception e) {
+                // 吞掉异常，不影响主流程
+            }
+        });
+    }
+
+    /**
      * 构建系统提示词（包含摘要上下文）
      *
      * @param sessionsDO 会话信息
@@ -137,25 +182,10 @@ public class AssistantServiceImpl implements AssistantService {
         Integer mode = sessionsDO.getMode();
         // 根据会话模式选择对应的系统提示词
         String systemPrompt = ChatPrompt.getSystemPrompt(mode);
-        if (StringUtils.isNotBlank(sessionsDO.getLastSummary())) {
-            systemPrompt += SUMMARY_HEADER + sessionsDO.getLastSummary();
+        if (StringUtils.isNotBlank(sessionsDO.getLastCompress())) {
+            systemPrompt += COMPRESS_HEADER + sessionsDO.getLastCompress();
         }
         return systemPrompt;
-    }
-
-    /**
-     * 截断会话，只保留最近N轮对话
-     * 10 轮 = 20 条消息（10 user + 10 assistant）
-     *
-     * @return 截断后的消息列表
-     */
-    private List<MessagesDO> truncateToMaxTurns(List<MessagesDO> messages, int maxTurns) {
-        // 如果消息列表为空或者长度小于等于最大轮数，则返回原列表
-        if (messages == null || messages.size() <= maxTurns * 2) {
-            return messages;
-        }
-        // 截断消息列表
-        return messages.subList(messages.size() - maxTurns * 2, messages.size());
     }
 
     /**
@@ -165,10 +195,7 @@ public class AssistantServiceImpl implements AssistantService {
      * @return ChatMessage 聊天消息对象
      */
     private ChatMessage toChatMessage(MessagesDO messagesDO) {
-        return switch (messagesDO.getRole()) {
-            case "user" -> UserMessage.from(messagesDO.getContent());
-            case "assistant" -> AiMessage.from(messagesDO.getContent());
-            default -> UserMessage.from(messagesDO.getContent()); // fallback
-        };
+        return messagesDO.getRole().equals(MessageRoleEnum.USER.getCode()) ?
+                UserMessage.from(messagesDO.getContent()) : AiMessage.from(messagesDO.getContent());
     }
 }
