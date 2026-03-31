@@ -62,7 +62,7 @@ public class AssistantServiceImpl implements AssistantService {
                     .title(DEFAULT_TITLE)
                     .mode(0)
                     .isDeleted(0)
-                    .status(0)
+                    .status(-1)
                     .build();
             sessionsMapper.insert(newSession);
             sessionId = newSession.getSessionId();
