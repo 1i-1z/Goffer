@@ -26,6 +26,8 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import static com.mi.goffer.common.constant.RedisCacheConstant.*;
+import static com.mi.goffer.common.constant.UserProfileConstant.DEFAULT_AVATAR;
+import static com.mi.goffer.common.constant.UserProfileConstant.DEFAULT_USER_NAME_PREFIX;
 import static com.mi.goffer.common.convention.errorcode.BaseErrorCode.*;
 
 /**
@@ -52,7 +54,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
         // 生成并发送验证码
         String code = mailUtil.sendVerificationCode(email);
         // 防止重复发送
-        String sendLockKey = "email:send:lock:" + email;
+        String sendLockKey = EMAIL_SEND_LOCK_KEY_PREFIX + email;
         Boolean hasLock = redisTemplate.opsForValue().setIfAbsent(sendLockKey, "1", 60, TimeUnit.SECONDS);
         if (Boolean.FALSE.equals(hasLock)) {
             throw new ClientException(EMAIL_CODE_TOO_FREQUENT);
@@ -82,7 +84,7 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
             usersDO = BeanUtil.toBean(reqDTO, UsersDO.class);
             usersDO.setUserName(generateRandomUsername());
             usersDO.setEmail(reqDTO.getEmail());
-            usersDO.setAvatar("https://goffer-oss.oss-cn-guangzhou.aliyuncs.com/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20260319181500_415_36.jpg");
+            usersDO.setAvatar(DEFAULT_AVATAR);
             baseMapper.insert(usersDO);
         }
         // 生成 token
@@ -226,6 +228,6 @@ public class UserServiceImpl extends ServiceImpl<UsersMapper, UsersDO> implement
     private String generateRandomUsername() {
         Random random = new Random();
         int randomNumber = random.nextInt(100000000);
-        return "用户" + String.format("%08d", randomNumber);
+        return DEFAULT_USER_NAME_PREFIX + String.format("%08d", randomNumber);
     }
 }

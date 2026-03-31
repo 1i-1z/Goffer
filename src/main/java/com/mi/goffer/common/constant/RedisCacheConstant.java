@@ -13,6 +13,11 @@ public class RedisCacheConstant {
     public static final String EMAIL_CODE_KEY_PREFIX = "email:code:";
 
     /**
+     * 邮件发送锁缓存前缀
+     */
+    public static final String EMAIL_SEND_LOCK_KEY_PREFIX = "email:send:lock:";
+
+    /**
      * 邮件验证码有效期（分钟）
      */
     public static final long EMAIL_CODE_EXPIRE_MINUTES = 5;
@@ -21,9 +26,4 @@ public class RedisCacheConstant {
      * 用户 Token 缓存 key
      */
     public static final String USER_TOKEN_KEY = "user:token:";
-
-    /**
-     * Token 过期时间（秒）- 15天 (与 JWT 配置一致)
-     */
-    public static final long TOKEN_EXPIRE_SECONDS = 1296000L;
 }
