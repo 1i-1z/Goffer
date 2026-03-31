@@ -7,7 +7,6 @@ package com.mi.goffer.common.constant;
  */
 public class ChatConstant {
 
-
     /**
      * 超过多少轮触发总结
      */
@@ -19,11 +18,6 @@ public class ChatConstant {
     public static final String COMPRESS_HEADER = """
             【上下文摘要】
             """;
-
-    /**
-     * 标题最大字符数
-     */
-    public static final int TITLE_MAX_LENGTH = 15;
 
     /**
      * 默认标题
