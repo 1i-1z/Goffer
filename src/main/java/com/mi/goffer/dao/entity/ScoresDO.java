@@ -3,12 +3,14 @@ package com.mi.goffer.dao.entity;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
+import java.util.Map;
 
 /**
  * @Author: 1i-1z
@@ -19,7 +21,7 @@ import java.util.Date;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@TableName("scores")
+@TableName(value = "scores", autoResultMap = true)
 public class ScoresDO {
     /**
      * 分数id
@@ -37,9 +39,35 @@ public class ScoresDO {
     private String messageId;
 
     /**
+     * 总分
+     */
+    private Integer totalScore;
+
+    /**
      * 分数
      */
-    private String score;
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private Map<String, Integer> score;
+
+    /**
+     * 总体评价
+     */
+    private String evaluation;
+
+    /**
+     * 技术优势
+     */
+    private String advantages;
+
+    /**
+     * 技术短板
+     */
+    private String disadvantages;
+
+    /**
+     * 学习建议
+     */
+    private String suggestion;
 
     /**
      * 创建时间

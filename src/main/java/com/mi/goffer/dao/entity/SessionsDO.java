@@ -1,14 +1,12 @@
 package com.mi.goffer.dao.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
-import java.util.List;
 
 /**
  * @Author: 1i-1z
@@ -39,7 +37,7 @@ public class SessionsDO {
     private String title;
 
     /**
-     * 模式：1（面试）、0（普通对话）
+     * 模式：0（普通对话）、1（后端面试）、2（前端面试）
      */
     private Integer mode;
 
