@@ -7,12 +7,12 @@ import java.util.Date;
 
 /**
  * @Author: TwentyFiveBTea
- * @Date: 2026/4/2 10:48
- * @Description: 会话标题返回参数
+ * @Date: 2026/4/2 14:43
+ * @Description: 聊天历史查询响应参数
  */
 @Data
 @Builder
-public class TitleRespDTO {
+public class QueryChatHistoryRespDTO {
 
     /**
      * 会话id
