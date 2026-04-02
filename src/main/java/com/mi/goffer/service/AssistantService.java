@@ -2,7 +2,10 @@ package com.mi.goffer.service;
 
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.resp.ChatRespDTO;
+import com.mi.goffer.dto.resp.TitleRespDTO;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 /**
  * @Author: TwentyFiveBTea
@@ -27,4 +30,12 @@ public interface AssistantService {
      * @return Flux<String> 流式响应
      */
     Flux<String> interview(String userId, ChatReqDTO reqDTO);
+
+    /**
+     * 获取所有会话标题
+     *
+     * @param userId 用户id
+     * @return List<TitleRespDTO> 会话标题列表
+     */
+    List<TitleRespDTO> getAllChatTitle(String userId);
 }

@@ -11,6 +11,7 @@ import com.mi.goffer.dao.mapper.MessagesMapper;
 import com.mi.goffer.dao.mapper.SessionsMapper;
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.resp.ChatRespDTO;
+import com.mi.goffer.dto.resp.TitleRespDTO;
 import com.mi.goffer.service.AssistantService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -148,12 +149,32 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
+     * 获取所有会话标题
+     *
+     * @param userId 用户id
+     * @return List<TitleRespDTO> 会话标题列表
+     */
+    @Override
+    public List<TitleRespDTO> getAllChatTitle(String userId) {
+        return sessionsMapper.selectList(Wrappers.lambdaQuery(SessionsDO.class)
+                        .eq(SessionsDO::getUserId, userId)
+                        .eq(SessionsDO::getMode, 0)
+                        .eq(SessionsDO::getIsDeleted, 0)
+                        .eq(SessionsDO::getStatus, -1)
+                        .orderByDesc(SessionsDO::getSessionId))
+                .stream().map(sessionsDO -> TitleRespDTO.builder()
+                        .title(sessionsDO.getTitle())
+                        .build())
+                .toList();
+    }
+
+    /**
      * 异步生成会话标题
      *
      * @param sessionId   会话id
      * @param userMessage 用户消息
      */
-    public void generateTitleAsync(Long sessionId, String userMessage) {
+    private void generateTitleAsync(Long sessionId, String userMessage) {
         CompletableFuture.runAsync(() -> {
             try {
                 // 构建系统提示词
