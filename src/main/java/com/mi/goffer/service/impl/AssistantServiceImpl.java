@@ -11,6 +11,7 @@ import com.mi.goffer.dao.mapper.MessagesMapper;
 import com.mi.goffer.dao.mapper.SessionsMapper;
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.resp.ChatRespDTO;
+import com.mi.goffer.dto.resp.QueryChatHistoryRespDTO;
 import com.mi.goffer.dto.resp.TitleRespDTO;
 import com.mi.goffer.service.AssistantService;
 import dev.langchain4j.data.message.AiMessage;
@@ -163,7 +164,37 @@ public class AssistantServiceImpl implements AssistantService {
                         .eq(SessionsDO::getStatus, -1)
                         .orderByDesc(SessionsDO::getSessionId))
                 .stream().map(sessionsDO -> TitleRespDTO.builder()
+                        .sessionId(sessionsDO.getSessionId())
                         .title(sessionsDO.getTitle())
+                        .createTime(sessionsDO.getCreateTime())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 查询会话历史
+     *
+     * @param userId 用户id
+     * @param keyword 关键词
+     * @return List<QueryChatHistoryRespDTO> 会话历史列表
+     * <p>
+     * 这里先用模糊查询查询数据库中的 Title，后续如果需要重构，
+     * 会考虑将内容持久化到 Elasticsearch 中，
+     * 并使用 Elasticsearch 的 Full-Text Search 功能进行查询。
+     */
+    @Override
+    public List<QueryChatHistoryRespDTO> queryChatHistory(String userId, String keyword) {
+        return sessionsMapper.selectList(Wrappers.lambdaQuery(SessionsDO.class)
+                        .eq(SessionsDO::getUserId, userId)
+                        .eq(SessionsDO::getMode, 0)
+                        .eq(SessionsDO::getIsDeleted, 0)
+                        .eq(SessionsDO::getStatus, -1)
+                        .like(SessionsDO::getTitle, keyword)
+                        .orderByDesc(SessionsDO::getSessionId))
+                .stream().map(sessionsDO -> QueryChatHistoryRespDTO.builder()
+                        .sessionId(sessionsDO.getSessionId())
+                        .title(sessionsDO.getTitle())
+                        .createTime(sessionsDO.getCreateTime())
                         .build())
                 .toList();
     }
