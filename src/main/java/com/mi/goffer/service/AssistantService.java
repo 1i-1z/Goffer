@@ -1,7 +1,9 @@
 package com.mi.goffer.service;
 
 import com.mi.goffer.dto.req.ChatReqDTO;
+import com.mi.goffer.dto.req.InterviewReqDTO;
 import com.mi.goffer.dto.resp.ChatRespDTO;
+import com.mi.goffer.dto.resp.InterviewRespDTO;
 import com.mi.goffer.dto.resp.QueryChatHistoryRespDTO;
 import com.mi.goffer.dto.resp.TitleRespDTO;
 import reactor.core.publisher.Flux;
@@ -30,7 +32,7 @@ public interface AssistantService {
      * @param reqDTO 请求参数
      * @return Flux<String> 流式响应
      */
-    Flux<String> interview(String userId, ChatReqDTO reqDTO);
+    Flux<InterviewRespDTO> interview(String userId, InterviewReqDTO reqDTO);
 
     /**
      * 获取所有会话标题
