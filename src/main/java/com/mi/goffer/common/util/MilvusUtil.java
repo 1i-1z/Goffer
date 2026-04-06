@@ -89,18 +89,20 @@ public class MilvusUtil {
      * @param subCategory 可选：限定子分类过滤
      * @return 命中的 knowledgeId 列表（按相似度从高到低）
      */
-    public List<Long> searchByVector(float[] vector, int topK, String category, String subCategory) {
+    public List<Long> searchByVector(List<Float> vector, int topK, String category, String subCategory) {
         SearchParam searchParam = SearchParam.newBuilder()
                 .withCollectionName(MilvusConstant.COLLECTION_NAME) // 指定集合名称
                 .withVectorFieldName(MilvusConstant.FIELD_VECTOR) // 指定向量字段名称
                 .withVectors(Collections.singletonList(vector)) // 指定查询向量
                 .withTopK(topK) // 指定返回条数
-                .withMetricType(MetricType.L2) // 指定距离度量方式
+                .withMetricType(MetricType.COSINE) // 指定距离度量方式
                 .withOutFields(Arrays.asList(
                         MilvusConstant.FIELD_KNOWLEDGE_ID,
                         MilvusConstant.FIELD_CATEGORY,
                         MilvusConstant.FIELD_SUB_CATEGORY))
-                .withExpr(Objects.requireNonNull(buildFilterExpr(category, subCategory))) // 指定过滤条件
+                .withExpr(buildFilterExpr(category, subCategory) != null 
+                ? buildFilterExpr(category, subCategory) 
+                : "") // 指定过滤条件
                 .build();
 
         // 执行搜索并用 SearchResultsWrapper 封装结果
