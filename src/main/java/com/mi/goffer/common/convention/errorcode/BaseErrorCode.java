@@ -38,7 +38,8 @@ public enum BaseErrorCode implements IErrorCode {
 
     // 会话与消息（0005xxx）
     SESSION_NOT_FOUND("0005300", "会话不存在或无权访问"),
-    SESSION_COMPRESS_FAILED("0005301", "对话压缩生成失败");
+    SESSION_COMPRESS_FAILED("0005301", "对话压缩生成失败"),
+    SESSION_MODE_NOT_INTERVIEW("0005302","会话模式错误，不是面试会话");
 
     // 用户注册登陆错误码
     private final String code;
