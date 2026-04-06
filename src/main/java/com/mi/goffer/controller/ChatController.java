@@ -4,7 +4,9 @@ import com.mi.goffer.common.context.UserContext;
 import com.mi.goffer.common.convention.result.Result;
 import com.mi.goffer.common.convention.result.Results;
 import com.mi.goffer.dto.req.ChatReqDTO;
+import com.mi.goffer.dto.req.InterviewReqDTO;
 import com.mi.goffer.dto.resp.ChatRespDTO;
+import com.mi.goffer.dto.resp.InterviewRespDTO;
 import com.mi.goffer.dto.resp.QueryChatHistoryRespDTO;
 import com.mi.goffer.dto.resp.TitleRespDTO;
 import com.mi.goffer.service.AssistantService;
@@ -59,4 +61,17 @@ public class ChatController {
     public Flux<ChatRespDTO> chat(@RequestBody @Validated ChatReqDTO reqDTO) {
         return assistantService.chat(UserContext.getCurrentUserId(), reqDTO);
     }
+
+    /**
+     * 面试对话
+     *
+     * @param reqDTO 面试参数
+     * @return Flux<InterviewRespDTO> 流式响应
+     */
+    @PostMapping(value = "/interview", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<InterviewRespDTO> interview(@RequestBody @Validated InterviewReqDTO reqDTO) {
+        return assistantService.interview(UserContext.getCurrentUserId(), reqDTO);
+    }
+
+
 }
