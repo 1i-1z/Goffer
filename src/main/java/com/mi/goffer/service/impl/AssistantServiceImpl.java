@@ -119,7 +119,7 @@ public class AssistantServiceImpl implements AssistantService {
                 .build());
 
         List<MessagesDO> uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
-        if (conversationContextManager.needCompress(uncompressedMessages)) {
+        if (conversationContextManager.needCompress(uncompressedMessages, sessionsDO.getMode())) {
             conversationContextManager.compress(uncompressedMessages, sessionsDO);
             // 压缩后重新加载未压缩部分
             uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
@@ -217,7 +217,7 @@ public class AssistantServiceImpl implements AssistantService {
         // 获取未压缩的消息列表
         List<MessagesDO> uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
         // 检查是否需要压缩上下文
-        if (conversationContextManager.needCompress(uncompressedMessages)) {
+        if (conversationContextManager.needCompress(uncompressedMessages, sessionsDO.getMode())) {
             conversationContextManager.compress(uncompressedMessages, sessionsDO);
             // 重新加载会话和消息
             sessionsDO = sessionsMapper.selectById(sessionId);

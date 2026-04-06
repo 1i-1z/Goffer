@@ -17,7 +17,8 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.List;
 
-import static com.mi.goffer.common.constant.ChatConstant.COMPRESS_TRIGGER_TURNS;
+import static com.mi.goffer.common.constant.ChatConstant.CHAT_COMPRESS_TRIGGER_TURNS;
+import static com.mi.goffer.common.constant.ChatConstant.INTERVIEW_COMPRESS_TRIGGER_TURNS;
 import static com.mi.goffer.common.convention.errorcode.BaseErrorCode.SESSION_COMPRESS_FAILED;
 import static com.mi.goffer.common.prompt.ChatPrompt.COMPRESS_SYSTEM_PROMPT;
 
@@ -51,15 +52,17 @@ public class ConversationContextManager {
      * 判断是否需要生成摘要
      *
      * @param messages 待判断的消息列表
+     * @param mode     会话模式：0（普通对话）、1（后端面试）、2（前端面试）
      * @return 是否需要生成摘要
      */
-    public boolean needCompress(List<MessagesDO> messages) {
-        // 会话不存在
+    public boolean needCompress(List<MessagesDO> messages, Integer mode) {
         if (CollectionUtils.isEmpty(messages)) return false;
         long userMessageCount = messages.stream()
                 .filter(message -> message.getRole().equals(MessageRoleEnum.USER.getCode()))
                 .count();
-        return userMessageCount >= COMPRESS_TRIGGER_TURNS;
+        return mode == 0
+                ? userMessageCount >= CHAT_COMPRESS_TRIGGER_TURNS
+                : userMessageCount >= INTERVIEW_COMPRESS_TRIGGER_TURNS;
     }
 
     /**

@@ -10,9 +10,14 @@ import java.util.List;
 public class ChatConstant {
 
     /**
-     * 超过多少轮触发总结
+     * 普通对话压缩触发阈值
      */
-    public static final int COMPRESS_TRIGGER_TURNS = 8;
+    public static final int CHAT_COMPRESS_TRIGGER_TURNS = 8;
+
+    /**
+     * 面试对话压缩触发阈值
+     */
+    public static final int INTERVIEW_COMPRESS_TRIGGER_TURNS = 12;
 
     /**
      * 摘要头部
