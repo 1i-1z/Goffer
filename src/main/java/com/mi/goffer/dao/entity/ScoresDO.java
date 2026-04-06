@@ -1,8 +1,6 @@
 package com.mi.goffer.dao.entity;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +24,7 @@ public class ScoresDO {
     /**
      * 分数id
      */
+    @TableId(type = IdType.ASSIGN_UUID)
     private String scoreId;
 
     /**
@@ -36,7 +35,7 @@ public class ScoresDO {
     /**
      * 所属消息id
      */
-    private String messageId;
+    private Long messageId;
 
     /**
      * 总分

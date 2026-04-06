@@ -47,7 +47,7 @@ public class SessionsDO {
     private Integer isDeleted;
 
     /**
-     * 状态：会话状态：-1（普通会话）、0（面试进行中）、1（面试已结束）、2（面试复盘完成）
+     * 状态：会话状态：-1（普通会话）、0（面试进行中）、1（面试复盘完成）
      */
     private Integer status;
 
