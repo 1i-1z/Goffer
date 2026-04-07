@@ -6,7 +6,6 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mi.goffer.common.constant.ChatConstant;
 import com.mi.goffer.common.convention.exception.ClientException;
 import com.mi.goffer.common.enums.MessageRoleEnum;
 import com.mi.goffer.common.prompt.ChatPrompt;
@@ -225,7 +224,7 @@ public class AssistantServiceImpl implements AssistantService {
         }
 
         // 构建系统提示词
-        String systemPrompt = buildSystemPrompt(sessionsDO);
+        String systemPrompt = buildSystemPromptForInterview(sessionsDO);
         // 知识检索（仅在用户有输入时执行）
         String knowledgeRef = null;
         if (StringUtils.isNotBlank(message)) {
@@ -434,16 +433,6 @@ public class AssistantServiceImpl implements AssistantService {
     private String buildSystemPrompt(SessionsDO sessionsDO) {
         Integer mode = sessionsDO.getMode();
         String systemPrompt = ChatPrompt.getSystemPrompt(mode);
-
-        // 根据 mode 注入对应分类列表（1=后端，2=前端）
-        if (mode == 1) {
-            systemPrompt = systemPrompt.replace("{common_categories}",
-                    String.join("、", ChatConstant.BACK_END_INTERVIEW_CATEGORIES));
-        } else if (mode == 2) {
-            systemPrompt = systemPrompt.replace("{common_categories}",
-                    String.join("、", ChatConstant.FRONT_END_INTERVIEW_CATEGORIES));
-        }
-
         if (StringUtils.isNotBlank(sessionsDO.getLastCompress())) {
             systemPrompt += COMPRESS_HEADER + sessionsDO.getLastCompress();
         }
@@ -460,7 +449,7 @@ public class AssistantServiceImpl implements AssistantService {
         Integer mode = sessionsDO.getMode();
         String systemPrompt = ChatPrompt.getSystemPrompt(mode);
 
-        // 根据 mode 注入对应分类列表
+        // 根据 mode 注入对应分类列表（1=后端，2=前端）
         if (mode == 1) {
             systemPrompt = systemPrompt.replace("{common_categories}",
                     String.join("、", BACK_END_INTERVIEW_CATEGORIES));
