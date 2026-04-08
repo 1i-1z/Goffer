@@ -5,10 +5,7 @@ import com.mi.goffer.common.convention.result.Result;
 import com.mi.goffer.common.convention.result.Results;
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.req.InterviewReqDTO;
-import com.mi.goffer.dto.resp.ChatRespDTO;
-import com.mi.goffer.dto.resp.InterviewRespDTO;
-import com.mi.goffer.dto.resp.QueryChatHistoryRespDTO;
-import com.mi.goffer.dto.resp.TitleRespDTO;
+import com.mi.goffer.dto.resp.*;
 import com.mi.goffer.service.AssistantService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -47,8 +44,18 @@ public class ChatController {
      * @return List<QueryChatHistoryRespDTO> 聊天历史列表
      */
     @GetMapping("/get-history")
-    public Result<List<QueryChatHistoryRespDTO>> getHistory(@RequestParam String keyword) {
+    public Result<List<QueryChatHistoryRespDTO>> getChatHistory(@RequestParam String keyword) {
         return Results.success(assistantService.queryChatHistory(UserContext.getCurrentUserId(), keyword));
+    }
+
+    /**
+     * 获取所有面试标题
+     *
+     * @return List<InterviewTitleRespDTO> 面试历史列表
+     */
+    @GetMapping("/get-interview-title")
+    public Result<List<InterviewTitleRespDTO>> getInterviewTitle(){
+        return Results.success(assistantService.getAllInterviewTitle(UserContext.getCurrentUserId()));
     }
 
     /**
