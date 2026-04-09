@@ -20,10 +20,7 @@ import com.mi.goffer.dao.mapper.ScoresMapper;
 import com.mi.goffer.dao.mapper.SessionsMapper;
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.req.InterviewReqDTO;
-import com.mi.goffer.dto.resp.ChatRespDTO;
-import com.mi.goffer.dto.resp.InterviewRespDTO;
-import com.mi.goffer.dto.resp.QueryChatHistoryRespDTO;
-import com.mi.goffer.dto.resp.TitleRespDTO;
+import com.mi.goffer.dto.resp.*;
 import com.mi.goffer.service.AssistantService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -379,6 +376,28 @@ public class AssistantServiceImpl implements AssistantService {
                         .eq(SessionsDO::getStatus, -1)
                         .orderByDesc(SessionsDO::getSessionId))
                 .stream().map(sessionsDO -> TitleRespDTO.builder()
+                        .sessionId(sessionsDO.getSessionId())
+                        .title(sessionsDO.getTitle())
+                        .createTime(sessionsDO.getCreateTime())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 获取所有面试标题
+     *
+     * @param userId 用户id
+     * @return List<InterviewTitleRespDTO> 面试历史列表
+     */
+    @Override
+    public List<InterviewTitleRespDTO> getAllInterviewTitle(String userId) {
+        return sessionsMapper.selectList(Wrappers.lambdaQuery(SessionsDO.class)
+                        .eq(SessionsDO::getUserId, userId)
+                        .eq(SessionsDO::getMode, 1)
+                        .eq(SessionsDO::getIsDeleted, 0)
+                        .in(SessionsDO::getStatus, 0, 1)
+                        .orderByDesc(SessionsDO::getSessionId))
+                .stream().map(sessionsDO -> InterviewTitleRespDTO.builder()
                         .sessionId(sessionsDO.getSessionId())
                         .title(sessionsDO.getTitle())
                         .createTime(sessionsDO.getCreateTime())

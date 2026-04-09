@@ -2,10 +2,7 @@ package com.mi.goffer.service;
 
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.req.InterviewReqDTO;
-import com.mi.goffer.dto.resp.ChatRespDTO;
-import com.mi.goffer.dto.resp.InterviewRespDTO;
-import com.mi.goffer.dto.resp.QueryChatHistoryRespDTO;
-import com.mi.goffer.dto.resp.TitleRespDTO;
+import com.mi.goffer.dto.resp.*;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -41,6 +38,14 @@ public interface AssistantService {
      * @return List<TitleRespDTO> 会话标题列表
      */
     List<TitleRespDTO> getAllChatTitle(String userId);
+
+    /**
+     * 获取所有面试标题
+     *
+     * @param userId 用户id
+     * @return List<InterviewTitleRespDTO> 面试历史列表
+     */
+    List<InterviewTitleRespDTO> getAllInterviewTitle(String userId);
 
     /**
      * 查询会话历史
