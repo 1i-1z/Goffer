@@ -72,6 +72,7 @@ public class AssistantServiceImpl implements AssistantService {
     private final EmbeddingModel embeddingModel;
     private final ConversationContextManager conversationContextManager;
     private final MilvusUtil milvusUtil;
+    private final VoiceManager voiceManager;
 
     // json 匹配正则，用于匹配面试模式下所返回的总结内容
     private static final Pattern JSON_PATTERN = Pattern.compile("```json\\s*\\n?(.*?)\\n?```", Pattern.DOTALL);
@@ -172,10 +173,30 @@ public class AssistantServiceImpl implements AssistantService {
      * @param reqDTO 请求参数
      * @return Flux<InterviewRespDTO> 流式响应
      */
+    // TODO
     @Override
     public Flux<InterviewRespDTO> interview(String userId, InterviewReqDTO reqDTO) {
         Long sessionId = reqDTO.getSessionId();
         SessionsDO sessionsDO = null;
+
+        String message = reqDTO.getMessage();
+        boolean isVoiceMode = "voice".equalsIgnoreCase(reqDTO.getInteractionMode());
+
+        if (isVoiceMode) {
+            if (reqDTO.getAudioFile() == null || reqDTO.getAudioFile().isEmpty()) {
+                return Flux.error(new RuntimeException("语音模式下音频文件不能为空"));
+            }
+            try {
+                message = voiceManager.speechToText(reqDTO.getAudioFile());
+            } catch (Exception e) {
+                log.error("[语音识别] 失败", e);
+                return Flux.error(new RuntimeException("语音识别失败: " + e.getMessage()));
+            }
+        }
+
+        if (message == null || message.trim().isEmpty()) {
+            return Flux.error(new RuntimeException("消息内容不能为空"));
+        }
         // 首次请求，sessionId 为空，自动创建会话
         if (sessionId == null) {
             SessionsDO newSession = SessionsDO.builder()
@@ -201,15 +222,15 @@ public class AssistantServiceImpl implements AssistantService {
         sessionsDO = sessionsMapper.selectById(sessionId);
         final Long finalSessionId = sessionId;
         final Integer currentStatus = sessionsDO.getStatus();
-        String message = reqDTO.getMessage();
+        String userMessage = reqDTO.getMessage();
         // 持久化用户消息
-        if (StringUtils.isNotBlank(message)) {
-            MessagesDO userMessage = MessagesDO.builder()
+        if (StringUtils.isNotBlank(userMessage)) {
+            MessagesDO userMessageDO = MessagesDO.builder()
                     .sessionId(sessionId)
                     .role(MessageRoleEnum.CANDIDATE.getCode())
                     .content(message)
                     .build();
-            messagesMapper.insert(userMessage);
+            messagesMapper.insert(userMessageDO);
         }
         // 重新获取会话
         sessionsDO = sessionsMapper.selectById(sessionId);
@@ -227,8 +248,8 @@ public class AssistantServiceImpl implements AssistantService {
         String systemPrompt = buildSystemPromptForInterview(sessionsDO);
         // 知识检索（仅在用户有输入时执行）
         String knowledgeRef = null;
-        if (StringUtils.isNotBlank(message)) {
-            knowledgeRef = searchKnowledgeRef(message, sessionsDO.getMode());
+        if (StringUtils.isNotBlank(userMessage)) {
+            knowledgeRef = searchKnowledgeRef(userMessage, sessionsDO.getMode());
         }
         if (StringUtils.isNotBlank(knowledgeRef)) {
             systemPrompt = systemPrompt.replace(TECH_REFERENCE, knowledgeRef);
@@ -242,8 +263,8 @@ public class AssistantServiceImpl implements AssistantService {
         for (MessagesDO truncatedMessage : uncompressedMessages) {
             messageList.add(toInterviewMessage(truncatedMessage));
         }
-        if (StringUtils.isNotBlank(message)) {
-            messageList.add(UserMessage.from(message));
+        if (StringUtils.isNotBlank(userMessage)) {
+            messageList.add(UserMessage.from(userMessage));
         }
         // 流式响应
         StringBuffer fullResponse = new StringBuffer();
@@ -310,6 +331,28 @@ public class AssistantServiceImpl implements AssistantService {
                 // 检测并保存评分（仅在面试进行中状态才处理）
                 if (currentStatus == 0) {
                     parseAndSaveScore(userId, aiMessageDO.getMessageId(), aiResponse, finalSessionId);
+                }
+                if (isVoiceMode) {
+                    try {
+                        String audioBase64 = voiceManager.textToSpeech(aiResponse);
+                        emitter.next(InterviewRespDTO.builder()
+                                .sessionId(finalSessionId)
+                                .audioData(audioBase64)
+                                .isFinal(true)
+                                .build());
+                    } catch (Exception e) {
+                        log.error("[语音合成] 失败，降级返回文本", e);
+                        emitter.next(InterviewRespDTO.builder()
+                                .sessionId(finalSessionId)
+                                .content(aiResponse)
+                                .isFinal(true)
+                                .build());
+                    }
+                } else {
+                    emitter.next(InterviewRespDTO.builder()
+                            .sessionId(finalSessionId)
+                            .isFinal(true)
+                            .build());
                 }
                 emitter.complete();
             }
