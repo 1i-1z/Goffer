@@ -21,17 +21,4 @@ public class InterviewRespDTO {
      * 流式内容片段
      */
     private String content;
-
-
-    /**
-     * Base64 编码的音频数据（仅语音模式最终响应返回）
-     */
-    private String audioData;
-
-    /**
-     * 是否为最终完整响应
-     * true: 流式结束，语音模式下此时 audioData 有值
-     * false: 流式中间片段
-     */
-    private Boolean isFinal = false;
 }

@@ -1,7 +1,6 @@
 package com.mi.goffer.dto.req;
 
 import lombok.Data;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * @Author: TwentyFiveBTea
@@ -22,17 +21,7 @@ public class InterviewReqDTO {
     private Integer mode;
 
     /**
-     * 消息内容（文本模式使用）
+     * 消息内容
      */
     private String message;
-
-    /**
-     * 音频文件（语音模式使用）
-     */
-    private MultipartFile audioFile;
-
-    /**
-     * 交互模式：text-纯文本, voice-语音交互
-     */
-    private String interactionMode = "text";
 }

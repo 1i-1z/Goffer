@@ -75,9 +75,8 @@ public class ChatController {
      * @param reqDTO 面试参数
      * @return Flux<InterviewRespDTO> 流式响应
      */
-    // TODO
     @PostMapping(value = "/interview", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<InterviewRespDTO> interview(@ModelAttribute @Validated InterviewReqDTO reqDTO) {
+    public Flux<InterviewRespDTO> interview(@RequestBody @Validated InterviewReqDTO reqDTO) {
         return assistantService.interview(UserContext.getCurrentUserId(), reqDTO);
     }
 
