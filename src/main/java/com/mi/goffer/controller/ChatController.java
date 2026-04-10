@@ -49,16 +49,6 @@ public class ChatController {
     }
 
     /**
-     * 获取所有面试标题
-     *
-     * @return List<InterviewTitleRespDTO> 面试历史列表
-     */
-    @GetMapping("/get-interview-title")
-    public Result<List<InterviewTitleRespDTO>> getInterviewTitle(){
-        return Results.success(assistantService.getAllInterviewTitle(UserContext.getCurrentUserId()));
-    }
-
-    /**
      * 普通对话
      *
      * @param reqDTO 请求参数
