@@ -3,6 +3,7 @@ package com.mi.goffer.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.mi.goffer.dao.entity.ScoresDO;
 import com.mi.goffer.dao.mapper.ScoresMapper;
+import com.mi.goffer.dto.resp.AbilityGrowthCurveRespDTO;
 import com.mi.goffer.dto.resp.CategoryScoreRespDTO;
 import com.mi.goffer.service.ScoreService;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,28 @@ public class ScoreServiceImpl implements ScoreService {
                         .category(entry.getKey())
                         .score(entry.getValue().intValue())
                         .build())
+                .toList();
+    }
+
+    /**
+     * 获取用户能力成长曲线参数（最后八次）
+     *
+     * @param userId 用户id
+     * @return List<AbilityGrowthCurveRespDTO> 能力成长曲线参数列表
+     */
+    @Override
+    public List<AbilityGrowthCurveRespDTO> getAbilityGrowthCurve(String userId) {
+        List<ScoresDO> scores = scoresMapper.selectList(Wrappers.lambdaQuery(ScoresDO.class)
+                .eq(ScoresDO::getUserId, userId)
+                .orderByDesc(ScoresDO::getScoreId)
+                .last("LIMIT 8"));
+        return scores.stream()
+                .flatMap(score -> score.getScore().entrySet().stream()
+                        .map(entry -> AbilityGrowthCurveRespDTO.builder()
+                                .category(entry.getKey())
+                                .score(entry.getValue())
+                                .crateTime(score.getCreateTime())
+                                .build()))
                 .toList();
     }
 }

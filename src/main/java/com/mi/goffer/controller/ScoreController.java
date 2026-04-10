@@ -3,6 +3,7 @@ package com.mi.goffer.controller;
 import com.mi.goffer.common.context.UserContext;
 import com.mi.goffer.common.convention.result.Result;
 import com.mi.goffer.common.convention.result.Results;
+import com.mi.goffer.dto.resp.AbilityGrowthCurveRespDTO;
 import com.mi.goffer.dto.resp.CategoryScoreRespDTO;
 import com.mi.goffer.service.ScoreService;
 import lombok.RequiredArgsConstructor;
@@ -42,5 +43,15 @@ public class ScoreController {
     @GetMapping("/category")
     public Result<List<CategoryScoreRespDTO>> getCategoryScore() {
         return Results.success(scoreService.getCategoryScore(UserContext.getCurrentUserId()));
+    }
+
+    /**
+     * 获取用户能力成长曲线参数（最后八次）
+     *
+     * @return List<AbilityGrowthCurveRespDTO> 能力成长曲线参数列表
+     */
+    @GetMapping("/get-ability-growth-curve")
+    public Result<List<AbilityGrowthCurveRespDTO>> getAbilityGrowthCurve() {
+        return Results.success(scoreService.getAbilityGrowthCurve(UserContext.getCurrentUserId()));
     }
 }

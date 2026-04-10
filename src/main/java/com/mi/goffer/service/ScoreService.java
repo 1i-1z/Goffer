@@ -1,5 +1,6 @@
 package com.mi.goffer.service;
 
+import com.mi.goffer.dto.resp.AbilityGrowthCurveRespDTO;
 import com.mi.goffer.dto.resp.CategoryScoreRespDTO;
 
 import java.util.List;
@@ -26,4 +27,12 @@ public interface ScoreService {
      * @return List<CategoryScoreRespDTO> 分类分数列表
      */
     List<CategoryScoreRespDTO> getCategoryScore(String userId);
+
+    /**
+     * 获取用户能力成长曲线参数（最后八次）
+     *
+     * @param userId 用户id
+     * @return List<AbilityGrowthCurveRespDTO> 能力成长曲线参数列表
+     */
+    List<AbilityGrowthCurveRespDTO> getAbilityGrowthCurve(String userId);
 }
