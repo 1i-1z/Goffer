@@ -59,6 +59,28 @@ public class ChatController {
     }
 
     /**
+     * 获取聊天消息
+     *
+     * @param sessionId 会话ID
+     * @return List<ChatMessageRespDTO> 聊天消息列表
+     */
+    @GetMapping("/get-chat-message")
+    public Result<List<ChatMessageRespDTO>> getChatMessage(@RequestParam String sessionId) {
+        return Results.success(assistantService.getMessageBySessionId(sessionId));
+    }
+
+    /**
+     * 获取面试消息
+     *
+     * @param sessionId 会话ID
+     * @return List<InterviewMessageRespDTO> 面试消息列表
+     */
+    @GetMapping("/get-interview-message")
+    public Result<List<InterviewMessageRespDTO>> getInterviewMessage(@RequestParam String sessionId) {
+        return Results.success(assistantService.getInterviewMessageBySessionId(sessionId));
+    }
+
+    /**
      * 普通对话
      *
      * @param reqDTO 请求参数
@@ -79,6 +101,4 @@ public class ChatController {
     public Flux<InterviewRespDTO> interview(@RequestBody @Validated InterviewReqDTO reqDTO) {
         return assistantService.interview(UserContext.getCurrentUserId(), reqDTO);
     }
-
-
 }

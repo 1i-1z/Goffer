@@ -55,4 +55,20 @@ public interface AssistantService {
      * @return List<InterviewHistoryInfoRespDTO> 面试历史信息列表
      */
     List<InterviewHistoryInfoRespDTO> getInterviewHistoryInfo(String userId);
+
+    /**
+     * 根据会话id获取消息列表
+     *
+     * @param sessionId 会话id
+     * @return List<ChatMessageRespDTO> 会话消息列表
+     */
+    List<ChatMessageRespDTO> getMessageBySessionId(String sessionId);
+
+    /**
+     * 根据会话id获取面试消息列表
+     *
+     * @param sessionId 会话id
+     * @return List<InterviewMessageRespDTO> 面试消息列表
+     */
+    List<InterviewMessageRespDTO> getInterviewMessageBySessionId(String sessionId);
 }

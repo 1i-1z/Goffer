@@ -414,6 +414,43 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
+     * 根据会话id获取消息列表
+     *
+     * @param sessionId 会话id
+     * @return List<ChatMessageRespDTO> 消息列表
+     */
+    @Override
+    public List<ChatMessageRespDTO> getMessageBySessionId(String sessionId) {
+        return messagesMapper.selectList(Wrappers.lambdaQuery(MessagesDO.class)
+                        .eq(MessagesDO::getSessionId, sessionId)
+                        .orderByAsc(MessagesDO::getMessageId))
+                .stream().map(messagesDO -> ChatMessageRespDTO.builder()
+                        .role(messagesDO.getRole())
+                        .content(messagesDO.getContent())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 根据会话id获取面试消息列表
+     *
+     * @param sessionId 会话id
+     * @return List<InterviewMessageRespDTO> 面试消息列表
+     */
+    @Override
+    public List<InterviewMessageRespDTO> getInterviewMessageBySessionId(String sessionId) {
+        return messagesMapper.selectList(Wrappers.lambdaQuery(MessagesDO.class)
+                        .eq(MessagesDO::getSessionId, sessionId)
+                        .orderByAsc(MessagesDO::getMessageId))
+                .stream().map(messagesDO -> InterviewMessageRespDTO.builder()
+                        .role(messagesDO.getRole())
+                        .content(messagesDO.getContent())
+                        .createTime(messagesDO.getCreateTime())
+                        .build())
+                .toList();
+    }
+
+    /**
      * 异步生成会话标题
      *
      * @param sessionId   会话id
