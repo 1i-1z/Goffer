@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static com.mi.goffer.common.constant.ChatConstant.*;
 import static com.mi.goffer.common.convention.errorcode.BaseErrorCode.SESSION_MODE_NOT_INTERVIEW;
@@ -306,7 +307,7 @@ public class AssistantServiceImpl implements AssistantService {
                 messagesMapper.insert(aiMessageDO);
                 // 检测并保存评分（仅在面试进行中状态才处理）
                 if (currentStatus == 0) {
-                    parseAndSaveScore(userId, aiMessageDO.getMessageId(), aiResponse, finalSessionId);
+                    parseAndSaveScore(userId, aiMessageDO.getSessionId(), aiResponse);
                 }
                 emitter.complete();
             }
@@ -365,6 +366,50 @@ public class AssistantServiceImpl implements AssistantService {
                         .title(sessionsDO.getTitle())
                         .createTime(sessionsDO.getCreateTime())
                         .build())
+                .toList();
+    }
+
+    /**
+     * 获取面试历史信息
+     *
+     * @param userId 用户id
+     * @return List<InterviewHistoryInfoRespDTO> 面试历史信息列表
+     */
+    @Override
+    public List<InterviewHistoryInfoRespDTO> getInterviewHistoryInfo(String userId) {
+        List<SessionsDO> sessions = sessionsMapper.selectList(Wrappers.lambdaQuery(SessionsDO.class)
+                .eq(SessionsDO::getUserId, userId)
+                .eq(SessionsDO::getMode, 1)
+                .eq(SessionsDO::getIsDeleted, 0)
+                .in(SessionsDO::getStatus, 0, 1)
+                .orderByDesc(SessionsDO::getCreateTime));
+        List<ScoresDO> scores = scoresMapper.selectList(Wrappers.lambdaQuery(ScoresDO.class)
+                .eq(ScoresDO::getUserId, userId));
+        // sessionId -> ScoresDO
+        Map<Long, ScoresDO> scoreMaps = scores.stream()
+                .collect(Collectors.toMap(ScoresDO::getSessionId, scoresDO -> scoresDO));
+
+        return sessions.stream()
+                .map(session -> {
+                    ScoresDO score = scoreMaps.get(session.getSessionId());
+                    List<CategoryScoreRespDTO> categoryScores = new ArrayList<>();
+
+                    if (score != null && score.getScore() != null) {
+                        categoryScores = score.getScore().entrySet().stream()
+                                .map(entry -> CategoryScoreRespDTO.builder()
+                                        .category(entry.getKey())
+                                        .score(entry.getValue())
+                                        .build())
+                                .toList();
+                    }
+
+                    return InterviewHistoryInfoRespDTO.builder()
+                            .sessionId(session.getSessionId())
+                            .title(session.getTitle())
+                            .createTime(session.getCreateTime())
+                            .categoryScoreRespDTOList(categoryScores)
+                            .build();
+                })
                 .toList();
     }
 
@@ -465,11 +510,10 @@ public class AssistantServiceImpl implements AssistantService {
      * 解析并保存面试评分数据
      *
      * @param userId     用户id
-     * @param messageId  AI 消息id
-     * @param aiResponse AI 完整回复
      * @param sessionId  会话id
+     * @param aiResponse AI 完整回复
      */
-    private void parseAndSaveScore(String userId, Long messageId, String aiResponse, Long sessionId) {
+    private void parseAndSaveScore(String userId, Long sessionId, String aiResponse) {
         Matcher matcher = JSON_PATTERN.matcher(aiResponse);
 
         if (matcher.find()) {
@@ -486,7 +530,7 @@ public class AssistantServiceImpl implements AssistantService {
 
                 ScoresDO scoresDO = ScoresDO.builder()
                         .userId(userId)
-                        .messageId(messageId)
+                        .sessionId(sessionId)
                         .totalScore(jsonNode.get("totalScore").asInt())
                         .score(scoreMap)
                         .evaluation(jsonNode.get("evaluation").asText())

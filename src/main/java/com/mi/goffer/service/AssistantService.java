@@ -48,5 +48,11 @@ public interface AssistantService {
      */
     List<QueryChatHistoryRespDTO> queryChatHistory(String userId, String keyword);
 
-
+    /**
+     * 获取面试历史信息
+     *
+     * @param userId 用户id
+     * @return List<InterviewHistoryInfoRespDTO> 面试历史信息列表
+     */
+    List<InterviewHistoryInfoRespDTO> getInterviewHistoryInfo(String userId);
 }

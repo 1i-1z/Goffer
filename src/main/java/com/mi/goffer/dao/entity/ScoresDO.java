@@ -33,9 +33,9 @@ public class ScoresDO {
     private String userId;
 
     /**
-     * 所属消息id
+     * 所属会话id
      */
-    private Long messageId;
+    private Long sessionId;
 
     /**
      * 总分

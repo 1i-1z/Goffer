@@ -49,6 +49,16 @@ public class ChatController {
     }
 
     /**
+     * 获取面试历史信息
+     *
+     * @return List<InterviewHistoryInfoRespDTO> 面试历史信息列表
+     */
+    @GetMapping("/get-interview-history")
+    public Result<List<InterviewHistoryInfoRespDTO>> getInterviewHistory() {
+        return Results.success(assistantService.getInterviewHistoryInfo(UserContext.getCurrentUserId()));
+    }
+
+    /**
      * 普通对话
      *
      * @param reqDTO 请求参数
