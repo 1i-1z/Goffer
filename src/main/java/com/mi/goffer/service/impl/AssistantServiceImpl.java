@@ -81,9 +81,9 @@ public class AssistantServiceImpl implements AssistantService {
     // 文本流 Sinks 缓存：key = sessionId，value = sink（voiceInterview 写入，interviewTextStream 订阅）
     private final Map<Long, Sinks.Many<String>> textSinkCache = new java.util.concurrent.ConcurrentHashMap<>();
 
-    // json 匹配正则
+    // json 匹配正则：只匹配代码块格式，纯文本 JSON 由 removeJsonByBraceMatch 处理
     private static final Pattern JSON_PATTERN = Pattern.compile(
-            "```json\\s*\\n?(.*?)\\n?```|\\{[^}]*totalScore[^}]*\\}",
+            "```json\\s*\\n?(.*?)\\n?```",
             Pattern.DOTALL
     );
 
@@ -640,8 +640,10 @@ public class AssistantServiceImpl implements AssistantService {
                         .role(MessageRoleEnum.INTERVIEWER.getCode())
                         .content(aiResponse)
                         .build());
-                // 解析并保存评分
-                parseAndSaveScore(userId, sessionId, aiResponse);
+                // 仅在面试复盘阶段（有 JSON 评分数据时）才解析并保存
+                if (aiResponse.contains("totalScore")) {
+                    parseAndSaveScore(userId, sessionId, aiResponse);
+                }
                 // 通知完成，传递过滤后的文本供 TTS 使用
                 onComplete.accept(filteredForTts);
             }
@@ -701,6 +703,7 @@ public class AssistantServiceImpl implements AssistantService {
         if (idx == -1) {
             return text;
         }
+        // 从 totalScore 位置向前找到起始 {
         int start = idx;
         while (start > 0 && text.charAt(start - 1) != '{') {
             start--;
@@ -708,8 +711,9 @@ public class AssistantServiceImpl implements AssistantService {
         if (start == 0) {
             return text;
         }
+        // 从 { 开始匹配括号
         int braceCount = 0;
-        int end = idx;
+        int end = start;
         while (end < text.length()) {
             char c = text.charAt(end);
             if (c == '{') {
@@ -724,6 +728,49 @@ public class AssistantServiceImpl implements AssistantService {
             end++;
         }
         return text.substring(0, start) + text.substring(end);
+    }
+
+    /**
+     * 从文本中提取包含 totalScore 的完整 JSON 对象
+     */
+    private String extractJsonByBraceMatch(String text) {
+        String marker = "totalScore";
+        int idx = text.indexOf(marker);
+        if (idx == -1) {
+            return null;
+        }
+        int start = idx;
+        while (start > 0 && text.charAt(start - 1) != '{') {
+            start--;
+        }
+        // 如果向前找不到 {，说明 { 不在 totalScore 前面（非法情况）
+        // 如果向前找不到 {，尝试从 totalScore 位置向后找到第一个 {
+        if (start == 0 || text.charAt(start) != '{') {
+            start = text.indexOf("{", idx);
+            if (start == -1) {
+                log.warn("extractJsonByBraceMatch: 文本中找不到 {{, jsonStr 前80: {}", text.substring(0, Math.min(80, text.length())));
+                return null;
+            }
+        }
+        int braceCount = 0;
+        int end = start;
+        while (end < text.length()) {
+            char c = text.charAt(end);
+            if (c == '{') {
+                braceCount++;
+            } else if (c == '}') {
+                braceCount--;
+                if (braceCount == 0) {
+                    end++;
+                    break;
+                }
+            }
+            end++;
+        }
+        String extracted = text.substring(start, end);
+        log.info("extractJsonByBraceMatch 提取结果, start={}, end={}, 提取长度={}, 内容预览: {}",
+                start, end, extracted.length(), extracted.substring(0, Math.min(120, extracted.length())));
+        return extracted;
     }
 
     /**
@@ -1013,43 +1060,53 @@ public class AssistantServiceImpl implements AssistantService {
      * @param aiResponse AI 完整回复
      */
     private void parseAndSaveScore(String userId, Long sessionId, String aiResponse) {
+        String jsonStr = null;
+
+        // 优先：尝试从代码块中提取 JSON
         Matcher matcher = JSON_PATTERN.matcher(aiResponse);
-
         if (matcher.find()) {
-            // 支持两种格式：
-            // 1. 代码块格式：```json ... ``` → group(1) 包含 JSON
-            // 2. 纯文本格式：{...} → group(0) 包含完整 JSON
-            String jsonStr = (matcher.group(1) != null ? matcher.group(1) : matcher.group(0)).trim();
-            ObjectMapper objectMapper = new ObjectMapper();
-            try {
-                JsonNode jsonNode = objectMapper.readTree(jsonStr);
-                // 使用 Jackson 解析 score 字段（Map<String, Integer>）
-                Map<String, Integer> scoreMap = objectMapper.convertValue(
-                        jsonNode.get("score"),
-                        new TypeReference<>() {
-                        }
-                );
+            jsonStr = matcher.group(1);
+        }
 
-                ScoresDO scoresDO = ScoresDO.builder()
-                        .userId(userId)
-                        .sessionId(sessionId)
-                        .totalScore(jsonNode.get("totalScore").asInt())
-                        .score(scoreMap)
-                        .evaluation(jsonNode.get("evaluation").asText())
-                        .advantages(jsonNode.get("advantages").asText())
-                        .disadvantages(jsonNode.get("disadvantages").asText())
-                        .suggestion(jsonNode.get("suggestion").asText())
-                        .build();
-                // 持久化评分数据
-                scoresMapper.insert(scoresDO);
-                // 更新会话状态为"面试复盘完成"
-                sessionsMapper.updateById(SessionsDO.builder()
-                        .sessionId(sessionId)
-                        .status(1)
-                        .build());
-            } catch (Exception e) {
-                log.error("解析面试评分 JSON 失败, jsonStr: {}", jsonStr, e);
-            }
+        // 兜底：从纯文本中提取完整 JSON（通过括号匹配）
+        if (jsonStr == null) {
+            jsonStr = extractJsonByBraceMatch(aiResponse);
+        }
+
+        if (jsonStr == null) {
+            log.debug("无法从 AI 回复中提取 JSON（可能是非复盘阶段）, sessionId: {}", sessionId);
+            return;
+        }
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        try {
+            JsonNode jsonNode = objectMapper.readTree(jsonStr);
+            // 使用 Jackson 解析 score 字段（Map<String, Integer>）
+            Map<String, Integer> scoreMap = objectMapper.convertValue(
+                    jsonNode.get("score"),
+                    new TypeReference<>() {
+                    }
+            );
+
+            ScoresDO scoresDO = ScoresDO.builder()
+                    .userId(userId)
+                    .sessionId(sessionId)
+                    .totalScore(jsonNode.get("totalScore").asInt())
+                    .score(scoreMap)
+                    .evaluation(jsonNode.get("evaluation").asText())
+                    .advantages(jsonNode.get("advantages").asText())
+                    .disadvantages(jsonNode.get("disadvantages").asText())
+                    .suggestion(jsonNode.get("suggestion").asText())
+                    .build();
+            // 持久化评分数据
+            scoresMapper.insert(scoresDO);
+            // 更新会话状态为"面试复盘完成"
+            sessionsMapper.updateById(SessionsDO.builder()
+                    .sessionId(sessionId)
+                    .status(1)
+                    .build());
+        } catch (Exception e) {
+            log.error("解析面试评分 JSON 失败, jsonStr: {}", jsonStr, e);
         }
     }
 
