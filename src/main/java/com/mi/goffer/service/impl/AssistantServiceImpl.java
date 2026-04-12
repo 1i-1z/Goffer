@@ -22,6 +22,7 @@ import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.req.InterviewReqDTO;
 import com.mi.goffer.dto.resp.*;
 import com.mi.goffer.service.AssistantService;
+import com.mi.goffer.service.VoiceService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -34,8 +35,11 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -70,9 +74,18 @@ public class AssistantServiceImpl implements AssistantService {
     private final EmbeddingModel embeddingModel;
     private final ConversationContextManager conversationContextManager;
     private final MilvusUtil milvusUtil;
+    private final VoiceService voiceService;
 
-    // json 匹配正则，用于匹配面试模式下所返回的总结内容
-    private static final Pattern JSON_PATTERN = Pattern.compile("```json\\s*\\n?(.*?)\\n?```", Pattern.DOTALL);
+    // TTS 音频缓存：key = sessionId，value = 缓存的音频数据（无过期时间，前端请求后即删除）
+    private final Map<Long, byte[]> ttsAudioCache = new java.util.concurrent.ConcurrentHashMap<>();
+    // 文本流 Sinks 缓存：key = sessionId，value = sink（voiceInterview 写入，interviewTextStream 订阅）
+    private final Map<Long, Sinks.Many<String>> textSinkCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    // json 匹配正则
+    private static final Pattern JSON_PATTERN = Pattern.compile(
+            "```json\\s*\\n?(.*?)\\n?```|\\{[^}]*totalScore[^}]*\\}",
+            Pattern.DOTALL
+    );
 
     /**
      * 普通对话
@@ -320,6 +333,430 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
+     * 语音面试
+     *
+     * @param userId    用户id
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @return Flux<byte[]> 音频流
+     */
+    @Override
+    public Flux<byte[]> voiceInterview(String userId, Long sessionId, Integer mode, MultipartFile audioFile) {
+        SessionsDO sessionsDO = null;
+        // 首次请求，sessionId 为空，自动创建会话
+        if (sessionId == null) {
+            SessionsDO newSession = SessionsDO.builder()
+                    .userId(userId)
+                    .title(generateInterviewTitle(userId, mode))
+                    .mode(mode)
+                    .isDeleted(0)
+                    .status(0)
+                    .build();
+            sessionsMapper.insert(newSession);
+            sessionId = newSession.getSessionId();
+        } else {
+            sessionsDO = sessionsMapper.selectById(sessionId);
+            if (sessionsDO == null) {
+                throw new ClientException(SESSION_NOT_FOUND);
+            }
+            if (sessionsDO.getMode() != 1 && sessionsDO.getMode() != 2) {
+                throw new ClientException(SESSION_MODE_NOT_INTERVIEW);
+            }
+        }
+
+        final Long finalSessionId = sessionId;
+        // ASR: 音频 → 文本
+        String transcribedText = voiceService.speechToText(audioFile);
+        log.info("voiceInterview - sessionId: {}, ASR转写结果: {}", finalSessionId, transcribedText);
+
+        // 无有效语音输入，返回静音
+        if (StringUtils.isBlank(transcribedText)) {
+            return Flux.just(voiceService.generateSilence());
+        }
+
+        // ASR 有结果，开始 AI → TTS 链路
+        StringBuilder aiResponse = new StringBuilder();
+        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
+        textSinkCache.put(finalSessionId, sink);
+
+        return Flux.create(emitter -> {
+            // 调用流式响应，收集完整文本后执行 TTS
+            streamInterviewResponseWithCallback(
+                    userId,
+                    finalSessionId,
+                    transcribedText,
+                    textChunk -> {
+                        aiResponse.append(textChunk);
+                        // 同步向 SSE 订阅者推送文本片段
+                        Sinks.EmitResult result = sink.tryEmitNext(textChunk);
+                        if (result.isFailure()) {
+                            log.warn("textSink推送失败 sessionId: {}, reason: {}", finalSessionId, result);
+                        }
+                    },
+                    filteredText -> {
+                        log.info("voiceInterview - AI完整回复(过滤后): {}, sessionId: {}", filteredText, finalSessionId);
+
+                        // 完成文本流
+                        sink.tryEmitComplete();
+                        textSinkCache.remove(finalSessionId);
+
+                        // TTS: 文本 → 音频（流式返回）
+                        try {
+                            Flux<byte[]> ttsFlux = voiceService.textToSpeechStream(filteredText);
+                            ttsFlux.subscribe(
+                                    emitter::next,
+                                    e -> {
+                                        log.error("TTS生成失败", e);
+                                        emitter.next(voiceService.generateSilence());
+                                        emitter.complete();
+                                    },
+                                    emitter::complete
+                            );
+                        } catch (Exception e) {
+                            log.error("TTS生成异常", e);
+                            emitter.next(voiceService.generateSilence());
+                            emitter.complete();
+                        }
+                    },
+                    emitter::error
+            );
+        });
+    }
+
+    @Override
+    public byte[] voiceInterviewByte(String userId, Long sessionId, Integer mode, MultipartFile audioFile) {
+        // 先查 TTS 缓存，有则直接返回（避免重复 LLM 调用）
+        byte[] cachedAudio = ttsAudioCache.remove(sessionId);
+        if (cachedAudio != null) {
+            log.info("voiceInterviewByte - 命中TTS缓存, sessionId: {}, size: {} bytes", sessionId, cachedAudio.length);
+            return cachedAudio;
+        }
+
+        // 缓存未命中，走原有流程：ASR → LLM → TTS
+        Flux<byte[]> audioFlux = voiceInterview(userId, sessionId, mode, audioFile);
+        return audioFlux.reduce(new byte[0], (a, b) -> {
+            byte[] result = new byte[a.length + b.length];
+            System.arraycopy(a, 0, result, 0, a.length);
+            System.arraycopy(b, 0, result, a.length, b.length);
+            return result;
+        }).block(Duration.ofSeconds(60));
+    }
+
+    /**
+     * 语音面试（返回流式数据）
+     *
+     * @param userId    用户id
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @param audioFile 音频文件
+     * @return Flux<InterviewRespDTO> 流式响应
+     */
+    @Override
+    public Flux<InterviewRespDTO> interviewTextStream(String userId, Long sessionId, Integer mode, MultipartFile audioFile) {
+        // 查文本流 sink
+        Sinks.Many<String> sink = textSinkCache.get(sessionId);
+        if (sink == null) {
+            log.warn("interviewTextStream - 未找到文本流, sessionId: {}, 请先调用 voiceInterview 接口", sessionId);
+            return Flux.error(new ClientException("请先调用语音面试接口"));
+        }
+
+        // 订阅 voiceInterview 推送的文本流，转换为 InterviewRespDTO
+        Flux<String> textFlux = sink.asFlux()
+                .onErrorResume(e -> {
+                    log.error("interviewTextStream - 文本流异常, sessionId: {}", sessionId, e);
+                    return Flux.empty();
+                });
+
+        return textFlux.map(textChunk -> InterviewRespDTO.builder()
+                .sessionId(sessionId)
+                .content(textChunk)
+                .build());
+    }
+
+    /**
+     * 带回调的面试流式响应（内部使用）
+     *
+     * @param userId     用户id
+     * @param sessionId  会话id
+     * @param message    用户消息
+     * @param onPartial  部分响应回调
+     * @param onComplete 完成回调，参数为过滤后可供 TTS 使用的文本
+     * @param onError    错误回调
+     */
+    private void streamInterviewResponseWithCallback(
+            String userId,
+            Long sessionId,
+            String message,
+            java.util.function.Consumer<String> onPartial,
+            java.util.function.Consumer<String> onComplete,
+            java.util.function.Consumer<Throwable> onError
+    ) {
+        SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
+        if (sessionsDO == null) {
+            onError.accept(new ClientException(SESSION_NOT_FOUND));
+            return;
+        }
+
+        // 持久化用户消息
+        if (StringUtils.isNotBlank(message)) {
+            messagesMapper.insert(MessagesDO.builder()
+                    .sessionId(sessionId)
+                    .role(MessageRoleEnum.CANDIDATE.getCode())
+                    .content(message)
+                    .build());
+        }
+
+        // 上下文压缩检查
+        List<MessagesDO> uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
+        if (conversationContextManager.needCompress(uncompressedMessages, sessionsDO.getMode())) {
+            conversationContextManager.compress(uncompressedMessages, sessionsDO);
+            sessionsDO = sessionsMapper.selectById(sessionId);
+            uncompressedMessages = conversationContextManager.getUncompressedMessages(sessionId, sessionsDO);
+        }
+
+        // 构建系统提示词
+        String systemPrompt = buildSystemPromptForVoiceInterview(sessionsDO);
+        String knowledgeRef = null;
+        if (StringUtils.isNotBlank(message)) {
+            knowledgeRef = searchKnowledgeRef(message, sessionsDO.getMode());
+        }
+        if (StringUtils.isNotBlank(knowledgeRef)) {
+            systemPrompt = systemPrompt.replace(TECH_REFERENCE, knowledgeRef);
+        } else {
+            systemPrompt = systemPrompt.replace(TECH_REFERENCE, NO_KNOWLEDGE_REFERENCE);
+        }
+
+        // 构建聊天消息列表
+        List<ChatMessage> messageList = new ArrayList<>();
+        messageList.add(SystemMessage.from(systemPrompt));
+        for (MessagesDO truncatedMessage : uncompressedMessages) {
+            messageList.add(toInterviewMessage(truncatedMessage));
+        }
+        if (StringUtils.isNotBlank(message)) {
+            messageList.add(UserMessage.from(message));
+        }
+
+        // 流式响应
+        StringBuffer fullResponse = new StringBuffer();
+        final boolean[] inJsonBlock = {false};
+        final StringBuffer jsonBuffer = new StringBuffer();
+        // 行级缓冲：用于流式输出时检测并过滤整行
+        final StringBuilder lineBuffer = new StringBuilder();
+        final boolean[] isFilteringLine = {false};
+
+        streamingChatModel.chat(messageList, new StreamingChatResponseHandler() {
+            @Override
+            public void onPartialResponse(String partialResponse) {
+                fullResponse.append(partialResponse);
+                StringBuilder filtered = new StringBuilder();
+
+                for (char c : partialResponse.toCharArray()) {
+                    if (inJsonBlock[0]) {
+                        // 处于 JSON 块内，累积直到检测到结束标记
+                        jsonBuffer.append(c);
+                        if (jsonBuffer.length() >= 4) {
+                            String tail = jsonBuffer.substring(jsonBuffer.length() - 4);
+                            if (tail.equals("```\n") || tail.equals("```")) {
+                                inJsonBlock[0] = false;
+                                jsonBuffer.setLength(0);
+                            }
+                        }
+                    } else {
+                        // 正常内容，检查是否进入 JSON 块
+                        jsonBuffer.append(c);
+                        if (jsonBuffer.length() >= 7) {
+                            String tail = jsonBuffer.substring(jsonBuffer.length() - 7);
+                            if (tail.equals("```json\n") || tail.equals("```json")) {
+                                // 进入 JSON 块，删除 ```json\n 部分
+                                filtered.deleteCharAt(filtered.length() - 1);
+                                jsonBuffer.setLength(0);
+                                inJsonBlock[0] = true;
+                            } else {
+                                // 不是 JSON 开头，正常处理字符
+                                if (jsonBuffer.length() > 7) {
+                                    jsonBuffer.deleteCharAt(0);
+                                }
+
+                                // 处理字符
+                                if (isFilteringLine[0]) {
+                                    // 当前处于过滤状态，跳过该行所有字符直到换行
+                                    if (c == '\n') {
+                                        isFilteringLine[0] = false;
+                                        lineBuffer.setLength(0);
+                                    }
+                                } else {
+                                    // 正常状态，添加到行缓冲区
+                                    lineBuffer.append(c);
+                                    String currentBuffer = lineBuffer.toString();
+
+                                    // 检查是否需要进入过滤状态（检测缓冲区结尾）
+                                    if (shouldStartFiltering(currentBuffer)) {
+                                        isFilteringLine[0] = true;
+                                        // 删除已添加到过滤结果的该行内容
+                                        // 找到最后一个换行符的位置
+                                        int lastNewline = filtered.lastIndexOf("\n");
+                                        if (lastNewline >= 0) {
+                                            filtered.setLength(lastNewline + 1);
+                                        } else {
+                                            filtered.setLength(0);
+                                        }
+                                    } else {
+                                        // 正常输出
+                                        filtered.append(c);
+                                    }
+
+                                    // 如果是换行符，重置行缓冲区
+                                    if (c == '\n') {
+                                        lineBuffer.setLength(0);
+                                    }
+                                }
+                            }
+                        } else {
+                            // 不到7个字符，正常处理
+                            if (!isFilteringLine[0]) {
+                                filtered.append(c);
+                            }
+                            lineBuffer.append(c);
+                            if (c == '\n') {
+                                lineBuffer.setLength(0);
+                            }
+                        }
+                    }
+                }
+
+                if (filtered.length() > 0) {
+                    onPartial.accept(filtered.toString());
+                }
+            }
+
+            @Override
+            public void onCompleteResponse(ChatResponse completeResponse) {
+                String aiResponse = fullResponse.toString();
+                // 最终过滤：移除所有引导性文字和评价（兜底处理）
+                String filteredForTts = filterInterviewOutput(aiResponse);
+                // 持久化 AI 响应（保留完整内容，包括 JSON）
+                messagesMapper.insert(MessagesDO.builder()
+                        .sessionId(sessionId)
+                        .role(MessageRoleEnum.INTERVIEWER.getCode())
+                        .content(aiResponse)
+                        .build());
+                // 解析并保存评分
+                parseAndSaveScore(userId, sessionId, aiResponse);
+                // 通知完成，传递过滤后的文本供 TTS 使用
+                onComplete.accept(filteredForTts);
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                onError.accept(error);
+            }
+        });
+    }
+
+    /**
+     * 判断当前缓冲区是否应该开始过滤
+     * 使用贪婪匹配：检测缓冲区结尾是否匹配过滤模式
+     *
+     * @param currentBuffer 当前行缓冲区内容
+     * @return true 表示应该开始过滤该行
+     */
+    private boolean shouldStartFiltering(String currentBuffer) {
+        if (currentBuffer == null || currentBuffer.isEmpty()) {
+            return false;
+        }
+        String trimmed = currentBuffer.trim();
+
+        // 检查各种需要过滤的模式（贪婪匹配）
+        // 评价行（直接以评价开头）
+        if (trimmed.matches("^评价[：:].*")) {
+            return true;
+        }
+        // 精确追问行
+        if (trimmed.matches("^精确追问[：:].*")) {
+            return true;
+        }
+        // 追问引导行
+        if (trimmed.matches("^追问点如下.*") || trimmed.matches("^以下是追问.*")) {
+            return true;
+        }
+        // 追问行
+        if (trimmed.matches("^追问[：:].*")) {
+            return true;
+        }
+        // 包含分数的行（"xxx分"格式，且行长度合理）
+        // 匹配模式：任意内容 + 数字 + 分
+        if (trimmed.matches(".*\\d+分.*") && trimmed.length() < 200) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 从文本中移除包含 totalScore 的 JSON 对象
+     * 通过向前找 {、向后匹配 } 来处理嵌套花括号
+     */
+    private String removeJsonByBraceMatch(String text) {
+        String marker = "totalScore";
+        int idx = text.indexOf(marker);
+        if (idx == -1) {
+            return text;
+        }
+        int start = idx;
+        while (start > 0 && text.charAt(start - 1) != '{') {
+            start--;
+        }
+        if (start == 0) {
+            return text;
+        }
+        int braceCount = 0;
+        int end = idx;
+        while (end < text.length()) {
+            char c = text.charAt(end);
+            if (c == '{') {
+                braceCount++;
+            } else if (c == '}') {
+                braceCount--;
+                if (braceCount == 0) {
+                    end++;
+                    break;
+                }
+            }
+            end++;
+        }
+        return text.substring(0, start) + text.substring(end);
+    }
+
+    /**
+     * 过滤面试输出中的引导性文字和评价
+     * 只保留题目和追问内容，移除"精确追问："、"评价："、"以下是追问"等前缀
+     *
+     * @param text 原始 AI 输出
+     * @return 过滤后的文本
+     */
+    private String filterInterviewOutput(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        // 移除所有以"精确追问："开头的行（整行移除）
+        text = text.replaceAll("(?m)^精确追问[：:].*$", "");
+        // 移除所有以"评价："开头的行（整行移除）
+        text = text.replaceAll("(?m)^评价[：:].*$", "");
+        // 移除所有以"以下是追问"开头的行
+        text = text.replaceAll("(?m)^以下是追问.*$", "");
+        // 移除所有以"追问点如下"开头的行
+        text = text.replaceAll("(?m)^追问点如下.*$", "");
+        // 移除所有以"追问："开头的行
+        text = text.replaceAll("(?m)^追问[：:].*$", "");
+        // 移除包含分数的行（如"6分"、"7分"等）
+        text = text.replaceAll("(?m)^.*\\d+分.*$", "");
+        // 移除纯 JSON 块（用于评分的，从 totalScore 向前找 { 向后匹配 }）
+        text = removeJsonByBraceMatch(text);
+        // 清理多余的空行
+        text = text.replaceAll("\n{3,}", "\n\n");
+        return text.trim();
+    }
+
+    /**
      * 获取所有会话标题
      *
      * @param userId 用户id
@@ -544,6 +981,31 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
+     * 构建语音面试系统提示词
+     *
+     * @param sessionsDO 会话信息
+     * @return 系统提示词
+     */
+    private String buildSystemPromptForVoiceInterview(SessionsDO sessionsDO) {
+        Integer mode = sessionsDO.getMode();
+        String systemPrompt = ChatPrompt.getVoiceSystemPrompt(mode);
+
+        // 根据 mode 注入对应分类列表（1=后端，2=前端）
+        if (mode == 1) {
+            systemPrompt = systemPrompt.replace("{common_categories}",
+                    String.join("、", BACK_END_INTERVIEW_CATEGORIES));
+        } else if (mode == 2) {
+            systemPrompt = systemPrompt.replace("{common_categories}",
+                    String.join("、", FRONT_END_INTERVIEW_CATEGORIES));
+        }
+
+        if (StringUtils.isNotBlank(sessionsDO.getLastCompress())) {
+            systemPrompt += COMPRESS_HEADER + sessionsDO.getLastCompress();
+        }
+        return systemPrompt;
+    }
+
+    /**
      * 解析并保存面试评分数据
      *
      * @param userId     用户id
@@ -554,7 +1016,10 @@ public class AssistantServiceImpl implements AssistantService {
         Matcher matcher = JSON_PATTERN.matcher(aiResponse);
 
         if (matcher.find()) {
-            String jsonStr = matcher.group(1).trim();
+            // 支持两种格式：
+            // 1. 代码块格式：```json ... ``` → group(1) 包含 JSON
+            // 2. 纯文本格式：{...} → group(0) 包含完整 JSON
+            String jsonStr = (matcher.group(1) != null ? matcher.group(1) : matcher.group(0)).trim();
             ObjectMapper objectMapper = new ObjectMapper();
             try {
                 JsonNode jsonNode = objectMapper.readTree(jsonStr);

@@ -8,9 +8,14 @@ import com.mi.goffer.dto.req.InterviewReqDTO;
 import com.mi.goffer.dto.resp.*;
 import com.mi.goffer.service.AssistantService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -22,6 +27,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @RequestMapping("/goffer")
 public class ChatController {
 
@@ -100,5 +106,46 @@ public class ChatController {
     @PostMapping(value = "/interview", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<InterviewRespDTO> interview(@RequestBody @Validated InterviewReqDTO reqDTO) {
         return assistantService.interview(UserContext.getCurrentUserId(), reqDTO);
+    }
+
+    /**
+     * 语音面试接口（音频）
+     * <p>
+     * 前端每 1.5 秒发送一个音频片段
+     * 后端：ASR转写 → AI对话 → TTS合成 → 返回音频流
+     *
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @return 音频流
+     */
+    @PostMapping(value = "/interview/voice")
+    public ResponseEntity<byte[]> voiceInterview(
+            @RequestParam Long sessionId,
+            @RequestParam Integer mode,
+            @RequestParam MultipartFile audioFile
+    ) {
+        byte[] audioData = assistantService.voiceInterviewByte(UserContext.getCurrentUserId(), sessionId, mode, audioFile);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("audio/mpeg"));
+        return new ResponseEntity<>(audioData, headers, HttpStatus.OK);
+    }
+
+    /**
+     * 语音面试接口（文本）
+     * <p>
+     * 前端每 1.5 秒发送一个音频片段
+     * 后端：ASR转写 → AI对话 → 响应流式数据
+     *
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @return Flux<InterviewRespDTO> 流式响应
+     */
+    @PostMapping(value = "/interview/voice-text", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<InterviewRespDTO> voiceInterviewText(
+            @RequestParam Long sessionId,
+            @RequestParam Integer mode,
+            @RequestParam MultipartFile audioFile
+    ) {
+        return assistantService.interviewTextStream(UserContext.getCurrentUserId(), sessionId, mode, audioFile);
     }
 }

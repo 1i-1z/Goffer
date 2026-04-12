@@ -3,6 +3,7 @@ package com.mi.goffer.service;
 import com.mi.goffer.dto.req.ChatReqDTO;
 import com.mi.goffer.dto.req.InterviewReqDTO;
 import com.mi.goffer.dto.resp.*;
+import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -16,6 +17,7 @@ public interface AssistantService {
 
     /**
      * 普通对话
+     *
      * @param userId 用户id
      * @param reqDTO 请求参数
      * @return Flux<ChatRespDTO> 流式响应
@@ -32,6 +34,38 @@ public interface AssistantService {
     Flux<InterviewRespDTO> interview(String userId, InterviewReqDTO reqDTO);
 
     /**
+     * 语音面试
+     *
+     * @param userId    用户id
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @return Flux<byte[]> 音频流
+     */
+    Flux<byte[]> voiceInterview(String userId, Long sessionId, Integer mode, MultipartFile audioFile);
+
+    /**
+     * 语音面试（返回完整音频数据）
+     *
+     * @param userId    用户id
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @param audioFile 音频文件
+     * @return byte[] 完整音频数据
+     */
+    byte[] voiceInterviewByte(String userId, Long sessionId, Integer mode, MultipartFile audioFile);
+
+    /**
+     * 语音面试（返回流式数据）
+     *
+     * @param userId    用户id
+     * @param sessionId 会话ID
+     * @param mode      面试模式（1：后端面试、2：前端面试）
+     * @param audioFile 音频文件
+     * @return Flux<InterviewRespDTO> 流式响应
+     */
+    Flux<InterviewRespDTO> interviewTextStream(String userId, Long sessionId, Integer mode, MultipartFile audioFile);
+
+    /**
      * 获取所有会话标题
      *
      * @param userId 用户id
@@ -42,7 +76,7 @@ public interface AssistantService {
     /**
      * 查询会话历史
      *
-     * @param userId 用户id
+     * @param userId  用户id
      * @param keyword 关键词
      * @return List<QueryChatHistoryRespDTO> 会话历史列表
      */
