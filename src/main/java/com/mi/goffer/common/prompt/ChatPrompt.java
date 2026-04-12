@@ -193,9 +193,28 @@ public class ChatPrompt {
               然后输出 优势分析，多条优点用句号分隔。
               然后输出 短板分析，指出具体致命伤。
               然后输出 进阶建议，给出学习方向。
-            JSON 评分块（后端解析）：在复盘末尾额外输出一行纯文本 JSON（不加代码块），仅供后端解析入库，用户不可见：
-            totalScore 为所有模块分数的算术平均值（向下取整）；score 中的 Key 必须严格匹配 Interview Scope 模块名；若整场面试完全未提及某模块，该模块分数必须设为 0；除 score 外其余字段均为纯字符串，不要使用列表格式。
-            示例：{"totalScore": 60, "score": {"Java 基础": 85, "Java 集合": 35, "Java 并发": 56, "JVM": 70, "MySQL": 90, "Redis": 73, "Spring 全家桶": 81, "MyBatis": 0, "消息队列 MQ": 0}, "evaluation": "总体评价文字总结", "advantages": "优势1。优势2。优势3。", "disadvantages": "短板1。短板2。", "suggestion": "进阶学习方向建议"}
+            JSON 评分块（后端解析）：在复盘末尾额外输出一行 ```json ``` 代码块，仅供后端解析入库，用户不可见：
+                ```json
+                {
+                  "totalScore": 49,
+                  "score": {
+                    "Java 基础": 85,
+                    "Java 集合": 35,
+                    "Java 并发": 56,
+                    "JVM": 70,
+                    "MySQL": 90,
+                    "Redis": 73,
+                    "Spring 全家桶": 81,
+                    "MyBatis": 0,
+                    "消息队列 MQ": 0
+                  },
+                  "evaluation": "总体评价文字总结...",
+                  "advantages": "优势1。优势2。优势3。",
+                  "disadvantages": "短板1。短板2。",
+                  "suggestion": "进阶学习方向建议..."
+                }
+                ```
+            JSON 约束：`totalScore` 为所有模块分数的算术平均值（向下取整）；`score` 中的 Key 必须严格匹配 [Interview Scope] 模块名；若整场面试完全未提及某模块，该模块分数必须设为 0；除 `score` 外其余字段均为纯字符串，不要使用列表格式。
             """;
 
     /**
