@@ -37,7 +37,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -78,8 +77,8 @@ public class AssistantServiceImpl implements AssistantService {
 
     // TTS 音频缓存：key = sessionId，value = 缓存的音频数据（无过期时间，前端请求后即删除）
     private final Map<Long, byte[]> ttsAudioCache = new java.util.concurrent.ConcurrentHashMap<>();
-    // 文本流 Sinks 缓存：key = sessionId，value = sink（voiceInterview 写入，interviewTextStream 订阅）
-    private final Map<Long, Sinks.Many<String>> textSinkCache = new java.util.concurrent.ConcurrentHashMap<>();
+//    // 文本流 Sinks 缓存：key = sessionId，value = sink（voiceInterview 写入，interviewTextStream 订阅）
+//    private final Map<Long, Sinks.Many<String>> textSinkCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     // json 匹配正则：只匹配代码块格式，纯文本 JSON 由 removeJsonByBraceMatch 处理
     private static final Pattern JSON_PATTERN = Pattern.compile(
@@ -342,27 +341,14 @@ public class AssistantServiceImpl implements AssistantService {
      */
     @Override
     public Flux<byte[]> voiceInterview(String userId, Long sessionId, Integer mode, MultipartFile audioFile) {
-        SessionsDO sessionsDO = null;
-        // 首次请求，sessionId 为空，自动创建会话
-        if (sessionId == null) {
-            SessionsDO newSession = SessionsDO.builder()
-                    .userId(userId)
-                    .title(generateInterviewTitle(userId, mode))
-                    .mode(mode)
-                    .isDeleted(0)
-                    .status(0)
-                    .build();
-            sessionsMapper.insert(newSession);
-            sessionId = newSession.getSessionId();
-        } else {
-            sessionsDO = sessionsMapper.selectById(sessionId);
-            if (sessionsDO == null) {
-                throw new ClientException(SESSION_NOT_FOUND);
-            }
-            if (sessionsDO.getMode() != 1 && sessionsDO.getMode() != 2) {
-                throw new ClientException(SESSION_MODE_NOT_INTERVIEW);
-            }
+        SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
+        if (sessionsDO == null) {
+            throw new ClientException(SESSION_NOT_FOUND);
         }
+        if (sessionsDO.getMode() != 1 && sessionsDO.getMode() != 2) {
+            throw new ClientException(SESSION_MODE_NOT_INTERVIEW);
+        }
+//        }
 
         final Long finalSessionId = sessionId;
         // ASR: 音频 → 文本
@@ -376,8 +362,8 @@ public class AssistantServiceImpl implements AssistantService {
 
         // ASR 有结果，开始 AI → TTS 链路
         StringBuilder aiResponse = new StringBuilder();
-        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
-        textSinkCache.put(finalSessionId, sink);
+//        Sinks.Many<String> sink = Sinks.many().multicast().onBackpressureBuffer();
+//        textSinkCache.put(finalSessionId, sink);
 
         return Flux.create(emitter -> {
             // 调用流式响应，收集完整文本后执行 TTS
@@ -387,18 +373,9 @@ public class AssistantServiceImpl implements AssistantService {
                     transcribedText,
                     textChunk -> {
                         aiResponse.append(textChunk);
-                        // 同步向 SSE 订阅者推送文本片段
-                        Sinks.EmitResult result = sink.tryEmitNext(textChunk);
-                        if (result.isFailure()) {
-                            log.warn("textSink推送失败 sessionId: {}, reason: {}", finalSessionId, result);
-                        }
                     },
                     filteredText -> {
                         log.info("voiceInterview - AI完整回复(过滤后): {}, sessionId: {}", filteredText, finalSessionId);
-
-                        // 完成文本流
-                        sink.tryEmitComplete();
-                        textSinkCache.remove(finalSessionId);
 
                         // TTS: 文本 → 音频（流式返回）
                         try {
@@ -443,34 +420,102 @@ public class AssistantServiceImpl implements AssistantService {
     }
 
     /**
-     * 语音面试（返回流式数据）
+     * 语音面试（合并接口：同时返回音频流和文本流）
      *
      * @param userId    用户id
      * @param sessionId 会话ID
      * @param mode      面试模式（1：后端面试、2：前端面试）
      * @param audioFile 音频文件
-     * @return Flux<InterviewRespDTO> 流式响应
+     * @return Flux<VoiceInterviewRespDTO> 流式响应（包含音频和文本）
      */
     @Override
-    public Flux<InterviewRespDTO> interviewTextStream(String userId, Long sessionId, Integer mode, MultipartFile audioFile) {
-        // 查文本流 sink
-        Sinks.Many<String> sink = textSinkCache.get(sessionId);
-        if (sink == null) {
-            log.warn("interviewTextStream - 未找到文本流, sessionId: {}, 请先调用 voiceInterview 接口", sessionId);
-            return Flux.error(new ClientException("请先调用语音面试接口"));
+    public Flux<VoiceInterviewRespDTO> voiceInterviewWithStream(String userId, Long sessionId, Integer mode, MultipartFile audioFile) {
+        SessionsDO sessionsDO = sessionsMapper.selectById(sessionId);
+        if (sessionsDO == null) {
+            throw new ClientException(SESSION_NOT_FOUND);
+        }
+        if (sessionsDO.getMode() != 1 && sessionsDO.getMode() != 2) {
+            throw new ClientException(SESSION_MODE_NOT_INTERVIEW);
         }
 
-        // 订阅 voiceInterview 推送的文本流，转换为 InterviewRespDTO
-        Flux<String> textFlux = sink.asFlux()
-                .onErrorResume(e -> {
-                    log.error("interviewTextStream - 文本流异常, sessionId: {}", sessionId, e);
-                    return Flux.empty();
-                });
+        final Long finalSessionId = sessionId;
+        // ASR: 音频 → 文本
+        String transcribedText = voiceService.speechToText(audioFile);
+        log.info("voiceInterviewWithStream - sessionId: {}, ASR转写结果: {}", finalSessionId, transcribedText);
 
-        return textFlux.map(textChunk -> InterviewRespDTO.builder()
-                .sessionId(sessionId)
-                .content(textChunk)
-                .build());
+        // 无有效语音输入，返回静音
+        if (StringUtils.isBlank(transcribedText)) {
+            byte[] silence = voiceService.generateSilence();
+            return Flux.just(VoiceInterviewRespDTO.builder()
+                    .sessionId(finalSessionId)
+                    .content("")
+                    .audioData(silence)
+                    .build());
+        }
+
+        return Flux.create(emitter -> {
+            VoiceInterviewRespDTO userTextDto = VoiceInterviewRespDTO.builder()
+                    .sessionId(finalSessionId)
+                    .content("user: " + transcribedText)
+                    .audioData(null)
+                    .build();
+            emitter.next(userTextDto);
+            StringBuilder aiResponse = new StringBuilder();
+
+            streamInterviewResponseWithCallback(
+                    userId,
+                    finalSessionId,
+                    transcribedText,
+                    textChunk -> {
+                        aiResponse.append(textChunk);
+                        VoiceInterviewRespDTO dto = VoiceInterviewRespDTO.builder()
+                                .sessionId(finalSessionId)
+                                .content("assistant: " + textChunk)
+                                .audioData(null)
+                                .build();
+                        emitter.next(dto);
+                    },
+                    filteredText -> {
+                        log.info("voiceInterviewWithStream - AI完整回复(过滤后): {}, sessionId: {}", filteredText, finalSessionId);
+
+                        try {
+                            Flux<byte[]> ttsFlux = voiceService.textToSpeechStream(filteredText);
+                            ttsFlux.subscribe(
+                                    audioChunk -> {
+                                        VoiceInterviewRespDTO dto = VoiceInterviewRespDTO.builder()
+                                                .sessionId(finalSessionId)
+                                                .content(null)
+                                                .audioData(audioChunk)
+                                                .build();
+                                        emitter.next(dto);
+                                    },
+                                    e -> {
+                                        log.error("TTS生成失败", e);
+                                        emitter.next(VoiceInterviewRespDTO.builder()
+                                                .sessionId(finalSessionId)
+                                                .content(null)
+                                                .audioData(voiceService.generateSilence())
+                                                .build());
+                                        emitter.complete();
+                                    },
+                                    emitter::complete
+                            );
+                        } catch (Exception e) {
+                            log.error("TTS生成异常", e);
+                            emitter.next(VoiceInterviewRespDTO.builder()
+                                    .sessionId(finalSessionId)
+                                    .content(null)
+                                    .audioData(voiceService.generateSilence())
+                                    .build());
+                            emitter.complete();
+                        }
+                    },
+                    error -> {
+                        log.error("LLM流式响应失败", error);
+                        emitter.error(error);
+                    }
+            );
+        });
     }
 
     /**
@@ -932,6 +977,31 @@ public class AssistantServiceImpl implements AssistantService {
                         .createTime(messagesDO.getCreateTime())
                         .build())
                 .toList();
+    }
+
+    /**
+     * 预创建面试会话
+     *
+     * @param userId 用户id
+     * @param mode   面试模式（1：后端面试、2：前端面试）
+     * @return Long sessionId
+     */
+    @Override
+    public Long createInterviewSession(String userId, Integer mode) {
+        if (mode == null || (mode != 1 && mode != 2)) {
+            throw new ClientException("面试模式不正确");
+        }
+
+        SessionsDO newSession = SessionsDO.builder()
+                .userId(userId)
+                .title(generateInterviewTitle(userId, mode))
+                .mode(mode)
+                .isDeleted(0)
+                .status(0)
+                .build();
+        sessionsMapper.insert(newSession);
+        log.info("预创建面试会话成功, userId: {}, mode: {}, sessionId: {}", userId, mode, newSession.getSessionId());
+        return newSession.getSessionId();
     }
 
     /**

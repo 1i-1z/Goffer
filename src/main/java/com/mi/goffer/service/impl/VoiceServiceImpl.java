@@ -42,30 +42,31 @@ public class VoiceServiceImpl implements VoiceService {
         String url = voiceConfig.getAsrBaseUrl() + VoiceConstant.ASR_ENDPOINT;
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType("multipart/form-data; boundary=" + BOUNDARY));
         headers.set("Authorization", "Bearer " + voiceConfig.getAsrApiKey());
 
         try {
             byte[] audioBytes = audioFile.getBytes();
             String filename = audioFile.getOriginalFilename() != null ? audioFile.getOriginalFilename() : "audio.mp3";
 
-            // 手动构建 multipart/form-data 请求体
+            String contentType = detectAudioContentType(filename);
+            headers.setContentType(MediaType.parseMediaType("multipart/form-data; boundary=" + BOUNDARY));
+
+            log.info("ASR请求: url={}, model={}, fileSize={}, fileName={}, contentType={}",
+                    url, voiceConfig.getAsrModelName(), audioBytes.length, filename, contentType);
+
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            
-            // 文件部分
+
             baos.write(("--" + BOUNDARY + "\r\n").getBytes());
             baos.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + filename + "\"\r\n").getBytes());
-            baos.write("Content-Type: audio/mpeg\r\n\r\n".getBytes());
+            baos.write(("Content-Type: " + contentType + "\r\n\r\n").getBytes());
             baos.write(audioBytes);
             baos.write("\r\n".getBytes());
 
-            // model 部分
             baos.write(("--" + BOUNDARY + "\r\n").getBytes());
             baos.write("Content-Disposition: form-data; name=\"model\"\r\n\r\n".getBytes());
             baos.write(voiceConfig.getAsrModelName().getBytes());
             baos.write("\r\n".getBytes());
 
-            // 结束边界
             baos.write(("--" + BOUNDARY + "--\r\n").getBytes());
 
             HttpEntity<byte[]> requestEntity = new HttpEntity<>(baos.toByteArray(), headers);
@@ -78,14 +79,34 @@ public class VoiceServiceImpl implements VoiceService {
             );
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                log.info("ASR成功: text={}", response.getBody().getText());
                 return response.getBody().getText();
+            } else {
+                log.error("ASR失败: statusCode={}, body={}", response.getStatusCode(), response.getBody());
             }
         } catch (IOException e) {
-            log.error("读取音频文件失败", e);
+            log.error("读取音频文件失败: {}", e.getMessage(), e);
         } catch (Exception e) {
-            log.error("ASR调用失败: {}", e.getMessage());
+            log.error("ASR调用失败: {}, exceptionType={}", e.getMessage(), e.getClass().getName(), e);
         }
         return "";
+    }
+
+    private String detectAudioContentType(String filename) {
+        if (filename == null) {
+            return "audio/mpeg";
+        }
+        String lowerName = filename.toLowerCase();
+        if (lowerName.endsWith(".webm")) {
+            return "audio/webm";
+        } else if (lowerName.endsWith(".wav")) {
+            return "audio/wav";
+        } else if (lowerName.endsWith(".ogg")) {
+            return "audio/ogg";
+        } else if (lowerName.endsWith(".flac")) {
+            return "audio/flac";
+        }
+        return "audio/mpeg";
     }
 
     /**

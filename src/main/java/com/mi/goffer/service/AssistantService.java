@@ -55,15 +55,15 @@ public interface AssistantService {
     byte[] voiceInterviewByte(String userId, Long sessionId, Integer mode, MultipartFile audioFile);
 
     /**
-     * 语音面试（返回流式数据）
+     * 语音面试（合并接口：同时返回音频流和文本流）
      *
      * @param userId    用户id
      * @param sessionId 会话ID
      * @param mode      面试模式（1：后端面试、2：前端面试）
      * @param audioFile 音频文件
-     * @return Flux<InterviewRespDTO> 流式响应
+     * @return Flux<VoiceInterviewRespDTO> 流式响应（包含音频和文本）
      */
-    Flux<InterviewRespDTO> interviewTextStream(String userId, Long sessionId, Integer mode, MultipartFile audioFile);
+    Flux<VoiceInterviewRespDTO> voiceInterviewWithStream(String userId, Long sessionId, Integer mode, MultipartFile audioFile);
 
     /**
      * 获取所有会话标题
@@ -105,4 +105,13 @@ public interface AssistantService {
      * @return List<InterviewMessageRespDTO> 面试消息列表
      */
     List<InterviewMessageRespDTO> getInterviewMessageBySessionId(String sessionId);
+
+    /**
+     * 预创建面试会话
+     *
+     * @param userId 用户id
+     * @param mode   面试模式（1：后端面试、2：前端面试）
+     * @return Long sessionId
+     */
+    Long createInterviewSession(String userId, Integer mode);
 }

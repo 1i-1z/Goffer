@@ -9,10 +9,7 @@ import com.mi.goffer.dto.resp.*;
 import com.mi.goffer.service.AssistantService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -109,43 +106,39 @@ public class ChatController {
     }
 
     /**
-     * 语音面试接口（音频）
+     * 预创建面试会话
      * <p>
-     * 前端每 1.5 秒发送一个音频片段
-     * 后端：ASR转写 → AI对话 → TTS合成 → 返回音频流
+     * 前端点击语音按钮时调用此接口，预先创建会话并返回sessionId
      *
-     * @param sessionId 会话ID
-     * @param mode      面试模式（1：后端面试、2：前端面试）
-     * @return 音频流
+     * @param mode 面试模式（1：后端面试、2：前端面试）
+     * @return Long sessionId
      */
-    @PostMapping(value = "/interview/voice")
-    public ResponseEntity<byte[]> voiceInterview(
-            @RequestParam Long sessionId,
-            @RequestParam Integer mode,
-            @RequestParam MultipartFile audioFile
-    ) {
-        byte[] audioData = assistantService.voiceInterviewByte(UserContext.getCurrentUserId(), sessionId, mode, audioFile);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType("audio/mpeg"));
-        return new ResponseEntity<>(audioData, headers, HttpStatus.OK);
+    @PostMapping("/interview/create-session")
+    public Result<Long> createInterviewSession(@RequestParam Integer mode) {
+        return Results.success(assistantService.createInterviewSession(UserContext.getCurrentUserId(), mode));
     }
 
     /**
-     * 语音面试接口（文本）
+     * 语音面试接口（合并：音频+文本流式输出）
      * <p>
      * 前端每 1.5 秒发送一个音频片段
-     * 后端：ASR转写 → AI对话 → 响应流式数据
+     * 后端：ASR转写 → AI对话 → TTS合成 → 同时返回音频流和文本流
+     * <p>
+     * 响应说明：
+     * - content 不为 null：文本片段，用于UI显示
+     * - audioData 不为 null：音频片段，用于播放
      *
      * @param sessionId 会话ID
      * @param mode      面试模式（1：后端面试、2：前端面试）
-     * @return Flux<InterviewRespDTO> 流式响应
+     * @param audioFile 音频文件
+     * @return Flux<VoiceInterviewRespDTO> 流式响应（包含音频和文本）
      */
-    @PostMapping(value = "/interview/voice-text", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<InterviewRespDTO> voiceInterviewText(
+    @PostMapping(value = "/interview/voice-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<VoiceInterviewRespDTO> voiceInterviewStream(
             @RequestParam Long sessionId,
             @RequestParam Integer mode,
             @RequestParam MultipartFile audioFile
     ) {
-        return assistantService.interviewTextStream(UserContext.getCurrentUserId(), sessionId, mode, audioFile);
+        return assistantService.voiceInterviewWithStream(UserContext.getCurrentUserId(), sessionId, mode, audioFile);
     }
 }
