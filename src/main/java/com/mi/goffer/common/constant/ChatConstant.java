@@ -59,9 +59,11 @@ public class ChatConstant {
      * 前端面试常用分类（按面试频率排序）
      * AI 优先从以下分类中随机选题，避免从 HTML 、CSS 开始
      */
-    // TODO 待完善
     public static final List<String> FRONT_END_INTERVIEW_CATEGORIES = List.of(
-
+        "HTML",
+        "CSS",
+        "JS",
+        "Vue"
     );
 
     /**
@@ -79,4 +81,5 @@ public class ChatConstant {
             "MyBatis",
             "消息队列 MQ"
     );
+
 }
