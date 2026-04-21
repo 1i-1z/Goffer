@@ -1,20 +1,30 @@
 package com.mi.goffer.common.util;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.mi.goffer.common.config.MilvusConfig;
 import com.mi.goffer.common.constant.MilvusConstant;
 import com.mi.goffer.dao.entity.InterviewKnowledgeDO;
 import io.milvus.client.MilvusClient;
 import io.milvus.client.MilvusServiceClient;
+import io.milvus.orm.iterator.QueryIterator;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.MetricType;
+import io.milvus.param.R;
 import io.milvus.param.dml.InsertParam;
+import io.milvus.param.dml.QueryIteratorParam;
 import io.milvus.param.dml.SearchParam;
+import io.milvus.response.QueryResultsWrapper;
 import io.milvus.response.SearchResultsWrapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 
 /**
@@ -138,5 +148,92 @@ public class MilvusUtil {
             return null;
         }
         return String.join(" && ", conditions);
+    }
+
+    /**
+     * 使用 Iterator 导出 Milvus 数据到本地 JSON 文件
+     *
+     * @param batchSize  每批返回的数据量
+     * @param outputPath 输出文件路径（传入 null 则使用默认文件名）
+     * @return 导出的记录数量
+     */
+    public int exportToJsonFile(long batchSize, String outputPath) {
+        if (outputPath == null || outputPath.isBlank()) {
+            outputPath = "interview_knowledge_VDB.json";
+        }
+
+        // 初始化/清空文件
+        try {
+            Files.write(Path.of(outputPath), "[]".getBytes(),
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            log.error("[Milvus] 初始化导出文件失败: {}", outputPath, e);
+            return 0;
+        }
+
+        QueryIteratorParam queryIteratorParam = QueryIteratorParam.newBuilder()
+                .withCollectionName(MilvusConstant.COLLECTION_NAME)
+                .withExpr("")
+                .withBatchSize(batchSize)
+                .addOutField(MilvusConstant.FIELD_KNOWLEDGE_ID)
+                .addOutField(MilvusConstant.FIELD_VECTOR)
+                .addOutField(MilvusConstant.FIELD_CATEGORY)
+                .addOutField(MilvusConstant.FIELD_SUB_CATEGORY)
+                .build();
+
+        R<QueryIterator> queryIteratorRes = milvusClient.queryIterator(queryIteratorParam);
+        if (queryIteratorRes.getStatus() != R.Status.Success.getCode()) {
+            log.error("Iterator 查询初始化失败: {}", queryIteratorRes.getMessage());
+            return 0;
+        }
+
+        QueryIterator queryIterator = queryIteratorRes.getData();
+        int totalCount = 0;
+
+        try {
+            while (true) {
+                List<QueryResultsWrapper.RowRecord> batchResults = queryIterator.next();
+                if (batchResults.isEmpty()) {
+                    break;
+                }
+
+                // 读取现有数据
+                String jsonString;
+                List<JSONObject> jsonObjectList;
+                try {
+                    jsonString = Files.readString(Path.of(outputPath));
+                    jsonObjectList = JSON.parseArray(jsonString).toJavaList(JSONObject.class);
+                } catch (IOException e) {
+                    log.error("[Milvus] 读取现有文件失败", e);
+                    break;
+                }
+
+                // 追加新数据
+                for (QueryResultsWrapper.RowRecord record : batchResults) {
+                    JSONObject row = new JSONObject();
+                    row.put("knowledgeId", record.get(MilvusConstant.FIELD_KNOWLEDGE_ID));
+                    row.put("vector", record.get(MilvusConstant.FIELD_VECTOR));
+                    row.put("category", record.get(MilvusConstant.FIELD_CATEGORY));
+                    row.put("subCategory", record.get(MilvusConstant.FIELD_SUB_CATEGORY));
+                    jsonObjectList.add(row);
+                    totalCount++;
+                }
+
+                // 写回文件
+                try {
+                    Files.write(Path.of(outputPath),
+                            JSON.toJSONString(jsonObjectList).getBytes(),
+                            StandardOpenOption.WRITE);
+                } catch (IOException e) {
+                    log.error("[Milvus] 写入文件失败", e);
+                    break;
+                }
+            }
+        } finally {
+            queryIterator.close();
+        }
+
+        log.info("[Milvus] 数据导出完成，共 {} 条，文件: {}", totalCount, outputPath);
+        return totalCount;
     }
 }
