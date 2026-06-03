@@ -69,6 +69,16 @@ public class ScoresDO {
     private String suggestion;
 
     /**
+     * 平均心率（单位：bpm）
+     */
+    private Integer avgHeartRate;
+
+    /**
+     * 平均血氧（单位：%）
+     */
+    private Integer avgBloodOxygen;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)
